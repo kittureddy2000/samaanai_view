@@ -123,7 +123,7 @@ else: # Production (Cloud Run)
     logger.info('Configuring for PRODUCTION Environment (Cloud Run)')
     DEBUG = env.bool('DEBUG', default=False)
 
-    # --- Google Cloud Secret Manager ---
+    # --- Google Cloud Project ---
     try:
         _, PROJECT_ID = google.auth.default()
         logger.info(f"Google Cloud project: {PROJECT_ID}")
@@ -138,34 +138,22 @@ else: # Production (Cloud Run)
     EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
     EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 
-    def get_secret(secret_name, project_id=PROJECT_ID):
-        """Retrieves the value of a secret from Google Secret Manager."""
-        try:
-            from google.cloud import secretmanager
-            client = secretmanager.SecretManagerServiceClient()
-            name = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
-            response = client.access_secret_version(request={"name": name})
-            secret_value = response.payload.data.decode('UTF-8')
-            logger.info(f"Successfully retrieved secret: {secret_name}")
-            return secret_value
-        except Exception as e:
-            logger.error(f"Failed to retrieve secret {secret_name}: {e}")
-            return None 
-
-    # Fetch secrets
-    SECRET_KEY = get_secret('SECRET_KEY')
+    # --- Secrets from Cloud Run Environment Variables ---
+    # When using --set-secrets in Cloud Run, secrets are mounted as environment variables
+    SECRET_KEY = env('SECRET_KEY', default=None)
     logger.info(f"SECRET_KEY loaded: {'set' if SECRET_KEY else 'not set'}")
-    DB_PASSWORD = get_secret('DB_PASSWORD')
+    DB_PASSWORD = env('DB_PASSWORD', default=None)
     logger.info(f"DB_PASSWORD loaded: {'set' if DB_PASSWORD else 'not set'}")
     
+    # Google Cloud Storage credentials (optional)
     try:
-        gcs_sa_key_content = get_secret('GOOGLE_APPLICATION_CREDENTIALS') 
+        gcs_sa_key_content = env('GOOGLE_APPLICATION_CREDENTIALS', default=None)
         if gcs_sa_key_content:
             service_account_info = json.loads(gcs_sa_key_content)
             GS_CREDENTIALS = service_account.Credentials.from_service_account_info(service_account_info)
-            logger.info("Successfully loaded GCS service account credentials from Secret Manager.")
+            logger.info("Successfully loaded GCS service account credentials from environment variable.")
         else:
-            logger.warning("GOOGLE_APPLICATION_CREDENTIALS secret not found or empty. Using default ADC for GCS.")
+            logger.warning("GOOGLE_APPLICATION_CREDENTIALS not found. Using default ADC for GCS.")
             GS_CREDENTIALS = None
     except Exception as e:
         logger.error(f"Failed to load GCS service account credentials: {e}")
@@ -181,9 +169,9 @@ else: # Production (Cloud Run)
     MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/media/'
 
     # --- Cloud Run Specific Settings ---
-    CLOUDRUN_SERVICE_URL = env("CLOUDRUN_SERVICE_URL", default=None)
-    if CLOUDRUN_SERVICE_URL:
-         ALLOWED_HOSTS = [urlparse(CLOUDRUN_SERVICE_URL).netloc, '.samaanai.com'] 
+    cloudrun_url = env("CLOUDRUN_SERVICE_URL", default=None)
+    if cloudrun_url:
+         ALLOWED_HOSTS = [urlparse(cloudrun_url).netloc, '.samaanai.com'] 
     else:
          ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=[])
     logger.info(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
@@ -195,8 +183,8 @@ else: # Production (Cloud Run)
 
     # Trust the Cloud Run URL and potentially the custom domain
     CSRF_TRUSTED_ORIGINS = []
-    if CLOUDRUN_SERVICE_URL:
-        CSRF_TRUSTED_ORIGINS.append(CLOUDRUN_SERVICE_URL)
+    if cloudrun_url:
+        CSRF_TRUSTED_ORIGINS.append(cloudrun_url)
     logger.info(f"CSRF_TRUSTED_ORIGINS: {CSRF_TRUSTED_ORIGINS}")
 
     CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS 
