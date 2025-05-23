@@ -21,16 +21,16 @@ steps:
       [
         'build',
         '-t',
-        'gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}',
+        'us-west1-docker.pkg.dev/$PROJECT_ID/samaanai-repo/${_BACKEND_SERVICE_NAME}',
         '--build-arg',
         'ENVIRONMENT=production',
         './backend',
       ]
 
-  # Step 3: Push the Docker image to Container Registry
+  # Step 3: Push the Docker image to Artifact Registry
   - id: "Push backend image"
     name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}']
+    args: ['push', 'us-west1-docker.pkg.dev/$PROJECT_ID/samaanai-repo/${_BACKEND_SERVICE_NAME}']
 
   # Step 4: Deploy to Cloud Run
   - id: "Deploy backend to Cloud Run"
@@ -40,7 +40,7 @@ steps:
       - 'run'
       - 'deploy'
       - '${_BACKEND_SERVICE_NAME}'
-      - '--image=gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}'
+      - '--image=us-west1-docker.pkg.dev/$PROJECT_ID/samaanai-repo/${_BACKEND_SERVICE_NAME}'
       - '--platform=managed'
       - '--region=${_REGION}'
       - '--allow-unauthenticated' # Or use --no-allow-unauthenticated and configure IAM
@@ -67,7 +67,7 @@ steps:
       # Example: '--cpu=1', '--memory=512Mi', '--concurrency=80'
 
 images:
-  - 'gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}'
+  - 'us-west1-docker.pkg.dev/$PROJECT_ID/samaanai-repo/${_BACKEND_SERVICE_NAME}'
 
 substitutions:
   _BACKEND_SERVICE_NAME: 'samaanai-backend' # Better naming convention
