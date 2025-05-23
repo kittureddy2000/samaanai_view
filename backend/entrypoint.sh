@@ -64,5 +64,5 @@ else
   # Comments moved to separate lines or removed
   # Adjust worker count based on Cloud Run instance size (e.g., 2-4 for basic instances)
   # Adjust threads based on workload (e.g., 2-4)
-  gunicorn calorie_tracker.wsgi:application --bind 0.0.0.0:8080
+  gunicorn samaanai.wsgi:application --bind 0.0.0.0:8080
 fi

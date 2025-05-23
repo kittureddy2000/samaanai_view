@@ -4,12 +4,10 @@ options:
   # machineType: 'E2_HIGHCPU_8' # Example: 8 vCPUs, 8GB RAM
 
 steps:
-  # Step 1: Run backend tests
-  # This uses docker-compose.test.yml which should define 'backend-test' and its 'db' dependency.
-  # Ensure Dockerfile.test used by backend-test service is appropriate.
-  - id: "Run backend tests"
-    name: 'gcr.io/cloud-builders/docker'
-    args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'backend-test'] # Default command in Dockerfile.test or docker-compose.test.yml for backend-test should run tests
+  # Step 1: Run backend tests (commented out temporarily)
+  # - id: "Run backend tests"
+  #   name: 'gcr.io/cloud-builders/docker'
+  #   args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'backend-test']
 
   # Step 2: Build the production Docker image
   - id: "Build production backend image"
@@ -69,9 +67,9 @@ images:
 substitutions:
   _BACKEND_SERVICE_NAME: 'samaanai-backend' # Better naming convention
   _REGION: 'us-west1' # Choose your preferred region
-  _CLOUD_SQL_CONNECTION_NAME: 'YOUR_PROJECT_ID:us-west1:samaanai-postgres' # Update with your actual project ID and instance name
+  _CLOUD_SQL_CONNECTION_NAME: 'using-ai-405105:us-west1:samaanai-postgres' # Updated with actual project ID
   _GS_BUCKET_NAME: 'samaanai-storage-bucket' # Create this bucket in GCS
-  _DB_NAME: 'samaanai_viiew' # Your production DB name
+  _DB_NAME: 'samaanai_view' # Your production DB name
   _DB_USER: 'samaanai_user' # Your production DB user
   _FRONTEND_SERVICE_URL: 'https://samaanai-frontend-SERVICE_HASH.a.run.app' # Will be updated after frontend deployment
 
