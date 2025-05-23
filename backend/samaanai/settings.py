@@ -173,7 +173,14 @@ else: # Production (Cloud Run)
     if cloudrun_url:
          ALLOWED_HOSTS = [urlparse(cloudrun_url).netloc, '.samaanai.com'] 
     else:
-         ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=[])
+         # Add the known Cloud Run URL pattern and fallback domains
+         ALLOWED_HOSTS = [
+             'samaanai-backend-1074693546571.us-west1.run.app',
+             '.run.app',
+             '.samaanai.com',
+             'localhost',
+             '127.0.0.1'
+         ]
     logger.info(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
 
     SECURE_SSL_REDIRECT = True
