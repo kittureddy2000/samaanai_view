@@ -159,13 +159,13 @@ else: # Production (Cloud Run)
     logger.info(f"DB_PASSWORD loaded: {'set' if DB_PASSWORD else 'not set'}")
     
     try:
-        gcs_sa_key_content = get_secret('GOOGLE_APPLICATION_CREDENTIALS_CONTENT') 
+        gcs_sa_key_content = get_secret('GOOGLE_APPLICATION_CREDENTIALS') 
         if gcs_sa_key_content:
             service_account_info = json.loads(gcs_sa_key_content)
             GS_CREDENTIALS = service_account.Credentials.from_service_account_info(service_account_info)
             logger.info("Successfully loaded GCS service account credentials from Secret Manager.")
         else:
-            logger.warning("GOOGLE_APPLICATION_CREDENTIALS_CONTENT secret not found or empty. Using default ADC for GCS.")
+            logger.warning("GOOGLE_APPLICATION_CREDENTIALS secret not found or empty. Using default ADC for GCS.")
             GS_CREDENTIALS = None
     except Exception as e:
         logger.error(f"Failed to load GCS service account credentials: {e}")
