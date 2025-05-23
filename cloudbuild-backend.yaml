@@ -62,7 +62,6 @@ steps:
       - '--set-secrets=GOOGLE_APPLICATION_CREDENTIALS=GOOGLE_APPLICATION_CREDENTIALS:latest'
       - '--set-secrets=GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest'
       - '--set-secrets=GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest'
-      - '--set-secrets=OAUTH_REDIRECT_URI=OAUTH_REDIRECT_URI:latest' # Prod OAuth Redirect
       # You might need to adjust CPU/memory, concurrency, min/max instances etc.
       # Example: '--cpu=1', '--memory=512Mi', '--concurrency=80'
 

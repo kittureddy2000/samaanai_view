@@ -389,12 +389,15 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ['email', 'profile']
 SOCIAL_AUTH_URL_NAMESPACE = 'social'
 
 if ENVIRONMENT == 'development':
-    SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = env('OAUTH_REDIRECT_URI', 
-        default='http://localhost:8000/api/auth/social/complete/google-oauth2/')
+    SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'http://localhost:8000/api/auth/social/complete/google-oauth2/'
     SOCIAL_AUTH_REDIRECT_IS_HTTPS = False
 else:
-    # Production Google OAuth configuration
-    SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = env('OAUTH_REDIRECT_URI', default='')
+    # Production Google OAuth configuration - construct from CLOUDRUN_SERVICE_URL or use a default
+    if CLOUDRUN_SERVICE_URL:
+        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = f'{CLOUDRUN_SERVICE_URL}/api/auth/social/complete/google-oauth2/'
+    else:
+        # Fallback: you can update this with your actual Cloud Run URL after deployment
+        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://samaanai-backend-SERVICE_HASH.a.run.app/api/auth/social/complete/google-oauth2/'
     SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
 
 SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/api/auth/social/token/'
