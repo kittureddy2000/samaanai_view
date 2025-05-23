@@ -4,10 +4,15 @@ options:
   # machineType: 'E2_HIGHCPU_8' # Example: 8 vCPUs, 8GB RAM
 
 steps:
-  # Step 1: Run backend tests (commented out temporarily)
-  # - id: "Run backend tests"
-  #   name: 'gcr.io/cloud-builders/docker'
-  #   args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'backend-test']
+  # Step 1: Run backend tests
+  - id: "Run backend tests"
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'backend-test']
+    env:
+      - 'POSTGRES_PASSWORD=testpass123'
+      - 'POSTGRES_USER=postgres'
+      - 'POSTGRES_DB=samaanai_test'
+      - 'ENVIRONMENT=test'
 
   # Step 2: Build the production Docker image
   - id: "Build production backend image"
@@ -17,9 +22,9 @@ steps:
         'build',
         '-t',
         'gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}',
-        '--build-arg', # Passed to backend/Dockerfile
+        '--build-arg',
         'ENVIRONMENT=production',
-        './backend', # Context is the backend directory
+        './backend',
       ]
 
   # Step 3: Push the Docker image to Container Registry

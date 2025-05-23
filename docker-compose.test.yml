@@ -3,9 +3,9 @@ services:
   db:
     image: postgres:14
     environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-samaanai_test}
+      - POSTGRES_PASSWORD=testpass123
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=samaanai_test
     ports:
       - "5432:5432"
     networks:
@@ -25,9 +25,9 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-samaanai_test}
-      - DB_USER=${POSTGRES_USER:-postgres}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=samaanai_test
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=testpass123
       - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
       - CORS_ALLOWED_ORIGINS=http://frontend-dev:3000
       - ENVIRONMENT=test
