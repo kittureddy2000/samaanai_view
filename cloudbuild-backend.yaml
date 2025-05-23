@@ -1,0 +1,79 @@
+options:
+  logging: 'CLOUD_LOGGING_ONLY'
+  # Increase machine type if tests/builds are slow or run out of memory
+  # machineType: 'E2_HIGHCPU_8' # Example: 8 vCPUs, 8GB RAM
+
+steps:
+  # Step 1: Run backend tests
+  # This uses docker-compose.test.yml which should define 'backend-test' and its 'db' dependency.
+  # Ensure Dockerfile.test used by backend-test service is appropriate.
+  - id: "Run backend tests"
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'backend-test'] # Default command in Dockerfile.test or docker-compose.test.yml for backend-test should run tests
+
+  # Step 2: Build the production Docker image
+  - id: "Build production backend image"
+    name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}',
+        '--build-arg', # Passed to backend/Dockerfile
+        'ENVIRONMENT=production',
+        './backend', # Context is the backend directory
+      ]
+
+  # Step 3: Push the Docker image to Container Registry
+  - id: "Push backend image"
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}']
+
+  # Step 4: Deploy to Cloud Run
+  - id: "Deploy backend to Cloud Run"
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:latest'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_BACKEND_SERVICE_NAME}'
+      - '--image=gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}'
+      - '--platform=managed'
+      - '--region=${_REGION}'
+      - '--allow-unauthenticated' # Or use --no-allow-unauthenticated and configure IAM
+      # Cloud SQL Connection (ensure your Cloud SQL instance is running)
+      - '--add-cloudsql-instances=${_CLOUD_SQL_CONNECTION_NAME}'
+      # Environment variables
+      # DB_HOST will be like /cloudsql/PROJECT_ID:REGION:INSTANCE for the proxy
+      # Your settings.py should handle this (psycopg2 can use unix sockets if host starts with /)
+      - '--set-env-vars=ENVIRONMENT=production,PROJECT_ID=$PROJECT_ID'
+      - '--set-env-vars=GS_BUCKET_NAME=${_GS_BUCKET_NAME}'
+      - '--set-env-vars=POSTGRES_DB=${_DB_NAME}' # From substitution
+      - '--set-env-vars=POSTGRES_USER=${_DB_USER}' # From substitution
+      - '--set-env-vars=DB_HOST=/cloudsql/${_CLOUD_SQL_CONNECTION_NAME}' # For Cloud SQL proxy
+      - '--set-env-vars=DB_PORT=5432' # Often ignored with Unix socket, but can be set
+      - '--set-env-vars=FRONTEND_URL=${_FRONTEND_SERVICE_URL}' # URL of your deployed frontend
+      # Secrets from Secret Manager (ensure these secrets exist in your project)
+      - '--set-secrets=SECRET_KEY=projects/$PROJECT_ID/secrets/SECRET_KEY:latest'
+      - '--set-secrets=DB_PASSWORD=projects/$PROJECT_ID/secrets/DB_PASSWORD:latest'
+      - '--set-secrets=GOOGLE_APPLICATION_CREDENTIALS_CONTENT=projects/$PROJECT_ID/secrets/GOOGLE_APPLICATION_CREDENTIALS_CONTENT:latest'
+      - '--set-secrets=GOOGLE_CLIENT_ID=projects/$PROJECT_ID/secrets/GOOGLE_CLIENT_ID:latest'
+      - '--set-secrets=GOOGLE_CLIENT_SECRET=projects/$PROJECT_ID/secrets/GOOGLE_CLIENT_SECRET:latest'
+      - '--set-secrets=OAUTH_REDIRECT_URI=projects/$PROJECT_ID/secrets/OAUTH_REDIRECT_URI:latest' # Prod OAuth Redirect
+      # You might need to adjust CPU/memory, concurrency, min/max instances etc.
+      # Example: '--cpu=1', '--memory=512Mi', '--concurrency=80'
+
+images:
+  - 'gcr.io/$PROJECT_ID/${_BACKEND_SERVICE_NAME}'
+
+substitutions:
+  _BACKEND_SERVICE_NAME: 'samaanai-backend' # Better naming convention
+  _REGION: 'us-west1' # Choose your preferred region
+  _CLOUD_SQL_CONNECTION_NAME: 'YOUR_PROJECT_ID:us-west1:samaanai-postgres' # Update with your actual project ID and instance name
+  _GS_BUCKET_NAME: 'samaanai-storage-bucket' # Create this bucket in GCS
+  _DB_NAME: 'samaanai_viiew' # Your production DB name
+  _DB_USER: 'samaanai_user' # Your production DB user
+  _FRONTEND_SERVICE_URL: 'https://samaanai-frontend-SERVICE_HASH.a.run.app' # Will be updated after frontend deployment
+
+# Timeout for the entire build
+timeout: '1800s' # 30 minutes

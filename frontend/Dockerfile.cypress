@@ -1,0 +1,17 @@
+FROM cypress/included:12.3.0
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# Copy the cypress directory and any configuration files
+COPY cypress cypress
+COPY cypress.config.js .
+
+# Set the base URL for tests to access the frontend service
+ENV CYPRESS_baseUrl=http://frontend:3000
+
+# Default command to run Cypress tests
+CMD ["npx", "cypress", "run"] 

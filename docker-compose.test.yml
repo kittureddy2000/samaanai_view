@@ -1,0 +1,102 @@
+# Test environment overrides
+services:
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-samaanai_test}
+    ports:
+      - "5432:5432"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    networks:
+      - test-network
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-samaanai_test}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+      - CORS_ALLOWED_ORIGINS=http://frontend-dev:3000
+      - ENVIRONMENT=test
+      - DEBUG=True
+      - SECRET_KEY=test-secret-key
+      - PROJECT_ID=test-project-id
+      - GS_BUCKET_NAME=test-bucket
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend-test-results:/app/test-results
+    command: python manage.py test
+
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    networks:
+      - test-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - frontend-test-results:/app/coverage
+    environment:
+      - CI=true
+      - REACT_APP_API_URL=http://backend-test:8000/api
+    command: npm test -- --coverage
+
+  cypress:
+    image: cypress/included:12.17.4
+    networks:
+      - test-network
+    depends_on:
+      - backend-test
+      - frontend-dev
+    volumes:
+      - ./frontend:/app
+      - cypress-results:/cypress/videos
+      - cypress-screenshots:/cypress/screenshots
+    environment:
+      - CYPRESS_baseUrl=http://frontend-dev:3000
+    working_dir: /app
+    command: cypress run
+
+  # For E2E testing we need a running frontend
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+      args:
+        ENVIRONMENT: development
+    networks:
+      - test-network
+    environment:
+      - REACT_APP_API_URL=http://backend-test:8000/api
+      - NODE_ENV=development
+    depends_on:
+      - backend-test
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  backend-test-results:
+  frontend-test-results:
+  cypress-results:
+  cypress-screenshots: 

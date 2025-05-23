@@ -1,0 +1,18 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# Copy the rest of the project files
+COPY . .
+
+# Set the environment to test
+ENV NODE_ENV=test
+ENV CI=true
+
+# Default command to run tests with coverage
+# The actual command will be overridden in run_tests.sh
+CMD ["npm", "run", "test:components"] 

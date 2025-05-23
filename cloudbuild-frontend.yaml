@@ -1,0 +1,43 @@
+steps:
+# 1. Run frontend unit tests
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'frontend-test', 'npm', 'test', '--', '--ci', '--passWithNoTests']
+
+# 2. Run E2E (Cypress) tests
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'cypress']
+
+# 3. Build the frontend image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', 
+         '-t', 'gcr.io/$PROJECT_ID/${_FRONTEND_SERVICE_NAME}', 
+         '--build-arg', 'ENVIRONMENT=production',
+         '--build-arg', 'REACT_APP_API_URL=${_BACKEND_SERVICE_URL}/api',
+         '--target', 'prod',
+         './frontend']
+
+# 4. Push the image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/$PROJECT_ID/${_FRONTEND_SERVICE_NAME}']
+
+# 5. Deploy to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args:
+    - 'run'
+    - 'deploy'
+    - '${_FRONTEND_SERVICE_NAME}'
+    - '--image=gcr.io/$PROJECT_ID/${_FRONTEND_SERVICE_NAME}'
+    - '--platform=managed'
+    - '--region=${_REGION}'
+    - '--allow-unauthenticated'
+
+images:
+  - 'gcr.io/$PROJECT_ID/${_FRONTEND_SERVICE_NAME}'
+
+substitutions:
+  _FRONTEND_SERVICE_NAME: 'samaanai-frontend'
+  _REGION: 'us-west1' # Should match backend region
+  _BACKEND_SERVICE_URL: 'https://samaanai-backend-SERVICE_HASH.a.run.app' # Will be updated after backend deployment
+
+timeout: '1200s' # 20 minutes

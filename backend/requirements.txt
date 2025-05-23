@@ -1,0 +1,21 @@
+Django>=4.0,<5.0
+djangorestframework>=3.12
+django-cors-headers>=3.7
+psycopg2-binary>=2.9 # Or psycopg2 if you prefer building it
+gunicorn>=20.1
+django-environ>=0.9
+dj-database-url>=2.0.0
+google-auth>=2.6
+google-cloud-secret-manager>=2.9
+google-cloud-logging>=3.0
+google-cloud-storage>=2.0
+django-storages[google]>=1.12 # Use the [google] extra
+djangorestframework-simplejwt>=5.0
+social-auth-app-django
+djangorestframework-simplejwt[token_blacklist]
+pytest==7.3.1
+pytest-django==4.5.2
+pytest-cov==4.1.0
+factory-boy==3.2.1
+faker==18.4.0
+coverage==7.2.5
