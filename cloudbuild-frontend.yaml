@@ -1,3 +1,8 @@
+options:
+  logging: 'CLOUD_LOGGING_ONLY'
+  # Increase machine type if tests/builds are slow or run out of memory
+  # machineType: 'E2_HIGHCPU_8' # Example: 8 vCPUs, 8GB RAM
+
 steps:
 # 1. Run frontend unit tests
 - name: 'gcr.io/cloud-builders/docker'
@@ -38,6 +43,6 @@ images:
 substitutions:
   _FRONTEND_SERVICE_NAME: 'samaanai-frontend'
   _REGION: 'us-west1' # Should match backend region
-  _BACKEND_SERVICE_URL: 'https://samaanai-backend-SERVICE_HASH.a.run.app' # Will be updated after backend deployment
+  _BACKEND_SERVICE_URL: 'https://samaanai-backend-1074693546571.us-west1.run.app' # Actual backend URL
 
 timeout: '1200s' # 20 minutes
