@@ -19,21 +19,40 @@ echo "DB_PORT: $DB_PORT"
 echo "POSTGRES_DB: $POSTGRES_DB"
 echo "POSTGRES_USER: $POSTGRES_USER"
 echo "DATABASE_URL: $DATABASE_URL"
-
-# Try an explicit connection to the database with psql
-echo "Testing database connection with psql..."
-export PGPASSWORD=$POSTGRES_PASSWORD
-psql -h $DB_HOST -p $DB_PORT -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT 'Connected successfully to database $POSTGRES_DB as user $POSTGRES_USER'" || echo "Could not connect with psql"
-echo "===== END DIAGNOSTICS ====="
+echo "ENVIRONMENT: $ENVIRONMENT"
 
 # Wait for the database service to be ready
-# Assumes default PostgreSQL port 5432 and service name 'db' from docker-compose
-echo "Waiting for database at host $DB_HOST..."
-while ! nc -z $DB_HOST $DB_PORT; do
-  echo "Waiting..."
-  sleep 0.5
-done
-echo "Database started"
+if [[ "$DB_HOST" == /cloudsql/* ]]; then
+    echo "Using Cloud SQL proxy connection..."
+    # For Cloud SQL proxy, we wait for the socket file to exist
+    echo "Waiting for Cloud SQL proxy socket at $DB_HOST..."
+    while [ ! -S "$DB_HOST/.s.PGSQL.5432" ]; do
+        echo "Waiting for Cloud SQL proxy socket..."
+        sleep 1
+    done
+    echo "Cloud SQL proxy socket is ready"
+    
+    # Test connection with psql
+    echo "Testing database connection with psql..."
+    export PGPASSWORD=$DB_PASSWORD
+    psql -h $DB_HOST -p $DB_PORT -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT 'Connected successfully to database $POSTGRES_DB as user $POSTGRES_USER'" || echo "Could not connect with psql"
+else
+    # For regular TCP connections (development)
+    echo "Using TCP connection to database..."
+    echo "Waiting for database at host $DB_HOST..."
+    while ! nc -z $DB_HOST $DB_PORT; do
+        echo "Waiting..."
+        sleep 0.5
+    done
+    echo "Database started"
+    
+    # Test connection with psql
+    echo "Testing database connection with psql..."
+    export PGPASSWORD=$DB_PASSWORD
+    psql -h $DB_HOST -p $DB_PORT -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT 'Connected successfully to database $POSTGRES_DB as user $POSTGRES_USER'" || echo "Could not connect with psql"
+fi
+
+echo "===== END DIAGNOSTICS ====="
 
 # Create superuser if needed (non-blocking)
 # Optional: remove if you handle superuser creation differently
