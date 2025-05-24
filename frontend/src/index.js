@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App'; // Assuming your main component is App.js
+import './debug'; // Add debug logging
 
 // Find the root element in your public/index.html
 const rootElement = document.getElementById('root');
