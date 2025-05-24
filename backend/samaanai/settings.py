@@ -397,8 +397,8 @@ else:
     if cloudrun_url:
         SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = f'{cloudrun_url}/api/auth/social/complete/google-oauth2/'
     else:
-        # Fallback: you can update this with your actual Cloud Run URL after deployment
-        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://samaanai-backend-SERVICE_HASH.a.run.app/api/auth/social/complete/google-oauth2/'
+        # Fallback: use the actual Cloud Run URL
+        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://samaanai-backend-1074693546571.us-west1.run.app/api/auth/social/complete/google-oauth2/'
     SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
 
 SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/api/auth/social/token/'
