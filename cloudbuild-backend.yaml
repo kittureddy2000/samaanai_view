@@ -75,7 +75,7 @@ substitutions:
   _GS_BUCKET_NAME: 'samaanai-storage-bucket' # Create this bucket in GCS
   _DB_NAME: 'samaanai_view' # Your production DB name
   _DB_USER: 'samaanai_user' # Your production DB user
-  _FRONTEND_SERVICE_URL: 'https://samaanai-frontend-SERVICE_HASH.a.run.app' # Will be updated after frontend deployment
+  _FRONTEND_SERVICE_URL: 'https://samaanai-frontend-1074693546571.us-west1.run.app' # Actual frontend URL
 
 # Timeout for the entire build
 timeout: '1800s' # 30 minutes

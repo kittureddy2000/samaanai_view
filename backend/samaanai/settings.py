@@ -192,6 +192,11 @@ else: # Production (Cloud Run)
     CSRF_TRUSTED_ORIGINS = []
     if cloudrun_url:
         CSRF_TRUSTED_ORIGINS.append(cloudrun_url)
+    
+    # Add frontend URL to CORS and CSRF trusted origins
+    frontend_url = env('FRONTEND_URL', default='https://samaanai-frontend-1074693546571.us-west1.run.app')
+    CSRF_TRUSTED_ORIGINS.append(frontend_url)
+    
     logger.info(f"CSRF_TRUSTED_ORIGINS: {CSRF_TRUSTED_ORIGINS}")
 
     CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS 
