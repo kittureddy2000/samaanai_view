@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import styled from 'styled-components';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../../common/auth';
 import {
   Card,
   Button,
@@ -49,7 +49,12 @@ const Register = () => {
       setError('');
       setSuccess(false);
       try {
-        await register(values.username, values.email, values.password);
+        await register({
+          username: values.username,
+          email: values.email,
+          password: values.password,
+          password2: values.confirmPassword
+        });
         setSuccess(true);
         setTimeout(() => navigate('/login'), 1500); 
       } catch (err) {

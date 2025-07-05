@@ -1,0 +1,75 @@
+# Cloud Build Triggers Configuration
+# Use this file to create triggers via gcloud CLI or Cloud Console
+
+# Frontend trigger with comprehensive testing
+frontend_trigger:
+  name: "samaanai-frontend-comprehensive-tests"
+  description: "Comprehensive test suite for frontend with detailed reporting"
+  github:
+    owner: "your-github-username"  # Replace with your GitHub username
+    name: "your-repo-name"         # Replace with your repository name
+    push:
+      branch: "^main$"             # Trigger on main branch pushes
+      includedFiles:
+        - "frontend/**"
+        - "docker-compose.test.yml"
+        - "cloudbuild-frontend.yaml"
+  filename: "cloudbuild-frontend.yaml"
+  
+  # Trigger on pull requests for testing
+  pullRequest:
+    branch: "^main$"
+    commentControl: "COMMENTS_ENABLED"
+    includedFiles:
+      - "frontend/**"
+      - "docker-compose.test.yml"
+      - "cloudbuild-frontend.yaml"
+
+# Backend trigger (for reference)
+backend_trigger:
+  name: "samaanai-backend-tests"
+  description: "Backend test suite with deployment"
+  github:
+    owner: "your-github-username"  # Replace with your GitHub username
+    name: "your-repo-name"         # Replace with your repository name
+    push:
+      branch: "^main$"
+      includedFiles:
+        - "backend/**"
+        - "docker-compose.test.yml"
+        - "cloudbuild-backend.yaml"
+  filename: "cloudbuild-backend.yaml"
+
+# Manual trigger for comprehensive testing
+manual_comprehensive_trigger:
+  name: "samaanai-manual-comprehensive-tests"
+  description: "Manual trigger for full comprehensive test suite"
+  github:
+    owner: "your-github-username"  # Replace with your GitHub username
+    name: "your-repo-name"         # Replace with your repository name
+  filename: "cloudbuild-frontend.yaml"
+  disabled: false
+
+# Setup Instructions:
+# 1. Create the Cloud Storage bucket for artifacts:
+#    gsutil mb gs://samaanai-build-artifacts
+#    gsutil lifecycle set lifecycle.json gs://samaanai-build-artifacts
+#
+# 2. Create triggers using gcloud CLI:
+#    gcloud builds triggers create github \
+#      --repo-name=your-repo-name \
+#      --repo-owner=your-github-username \
+#      --branch-pattern="^main$" \
+#      --build-config=cloudbuild-frontend.yaml \
+#      --name=samaanai-frontend-comprehensive-tests \
+#      --description="Comprehensive test suite for frontend"
+#
+# 3. Set up IAM permissions for Cloud Build service account:
+#    - Storage Admin (for uploading artifacts)
+#    - Cloud Run Admin (for deployment)
+#    - Artifact Registry Writer (for pushing images)
+#
+# 4. Enable required APIs:
+#    gcloud services enable cloudbuild.googleapis.com
+#    gcloud services enable run.googleapis.com
+#    gcloud services enable artifactregistry.googleapis.com 

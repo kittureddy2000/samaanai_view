@@ -1,0 +1,45 @@
+version: '3.8'
+
+# HTTPS Development Configuration
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.https.yml up
+
+services:
+  # NGINX reverse proxy for HTTPS termination
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+      - "80:80"  # For HTTP to HTTPS redirect
+    volumes:
+      - ./nginx/https.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl/certs:ro
+      - ./ssl:/etc/ssl/private:ro
+    networks:
+      - app-network
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+  # Override backend for HTTPS environment
+  backend:
+    environment:
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend,host.docker.internal
+      - CORS_ALLOWED_ORIGINS=https://localhost,https://127.0.0.1:443,https://localhost:443
+      - FRONTEND_URL=https://localhost
+      - SECURE_SSL_REDIRECT=True
+      - SECURE_PROXY_SSL_HEADER_NAME=HTTP_X_FORWARDED_PROTO
+      - SECURE_PROXY_SSL_HEADER_VALUE=https
+
+  # Override frontend for HTTPS environment  
+  frontend:
+    environment:
+      - REACT_APP_API_URL=https://localhost/api
+      - HTTPS=false  # Let NGINX handle HTTPS, React dev server uses HTTP internally
+      - SSL_CRT_FILE=
+      - SSL_KEY_FILE=
+      - NODE_ENV=development
+
+networks:
+  app-network:
+    driver: bridge 

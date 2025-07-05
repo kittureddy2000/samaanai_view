@@ -1,0 +1,30 @@
+{% extends "notifications/base_email.html" %}
+
+{% block title %}Test Notification - Your Finance App{% endblock %}
+
+{% block content %}
+<h1>✅ Test Notification</h1>
+
+<p>Hi {{ user.get_full_name|default:user.username }},</p>
+
+<div class="alert-info">
+    <h3>🎉 Success!</h3>
+    <p>This is a test notification to confirm that your email settings are working correctly.</p>
+    <p><strong>Sent at:</strong> {{ test_time|date:"F j, Y g:i A" }}</p>
+</div>
+
+<h3>Your notification preferences are active:</h3>
+<ul>
+    <li>✅ Email notifications enabled</li>
+    <li>📧 Test notifications working</li>
+    <li>🔔 Ready to receive important alerts</li>
+</ul>
+
+<p>You can manage your notification preferences anytime by visiting your settings page.</p>
+
+<a href="{{ preferences_url }}" class="button">Manage Settings</a>
+
+<p>Thank you for using our Finance App!</p>
+
+<p><em>If you didn't request this test notification, you can safely ignore this email.</em></p>
+{% endblock %} 

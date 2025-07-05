@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { format, getYear, getMonth } from 'date-fns';
 import { 
@@ -13,6 +14,7 @@ import {
 import { Bar } from 'react-chartjs-2';
 
 import nutritionService from '../services/nutritionService';
+import { useAuth } from '../../../common/auth';
 import { 
   Card, 
   Button, 
@@ -32,7 +34,15 @@ ChartJS.register(
   Legend
 );
 
+// Helper function to parse date strings as local dates (not UTC)
+const parseLocalDate = (dateString) => {
+  // Parse YYYY-MM-DD as local date, not UTC
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day); // month is 0-indexed in Date constructor
+};
+
 const MonthlyReport = () => {
+  const { currentUser } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [monthlyData, setMonthlyData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -80,11 +90,11 @@ const MonthlyReport = () => {
     
     // Sort entries by date
     const sortedEntries = [...(monthlyData?.daily_entries || [])].sort((a, b) => 
-      new Date(a.date) - new Date(b.date)
+      parseLocalDate(a.date) - parseLocalDate(b.date)
     );
     
     // Format dates for labels
-    const labels = sortedEntries.map(entry => format(new Date(entry.date), 'd'));
+    const labels = sortedEntries.map(entry => format(parseLocalDate(entry.date), 'd'));
     
     // Data for chart
     const foodData = sortedEntries.map(entry => entry.total_food_calories || 0);
@@ -277,6 +287,15 @@ const MonthlyReport = () => {
                         return total;
                       })() || 0} cal
                     </SummaryBoxValue>
+                    {!currentUser?.profile?.metabolic_rate && (
+                      <SetupLink>
+                        <StyledLink to="/nutrition/profile">
+                          <Text size="0.75rem" color="primary" noMargin>
+                            Set up metabolic rate →
+                          </Text>
+                        </StyledLink>
+                      </SetupLink>
+                    )}
                   </SummaryBoxContent>
                 </SummaryBox>
                 
@@ -328,7 +347,7 @@ const MonthlyReport = () => {
               <CalendarGrid>
                 {Array.from({ length: new Date(getYear(currentMonth), getMonth(currentMonth), 0).getDate() }, (_, i) => i + 1).map(day => {
                   const entry = monthlyData.daily_entries?.find(
-                    e => new Date(e.date).getDate() === day
+                    e => parseLocalDate(e.date).getDate() === day
                   );
                   
                   return (
@@ -495,6 +514,14 @@ const ChartHeader = styled.div`
 
 const ChartContainer = styled.div`
   height: 400px;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    height: 300px;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    height: 250px;
+  }
 `;
 
 const EmptyState = styled.div`
@@ -524,6 +551,14 @@ const CalendarGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 0.5rem;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    gap: 0.25rem;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    gap: 2px;
+  }
 `;
 
 const CalendarDay = styled.div`
@@ -535,13 +570,39 @@ const CalendarDay = styled.div`
   background-color: ${({ theme, hasData }) => hasData ? theme.colors.white : theme.colors.light};
   box-shadow: ${({ theme }) => theme.shadows.small};
   width: 100%;
-  height: 100%;
+  height: 100px;
+  min-height: 100px;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding: 0.25rem;
+    height: 80px;
+    min-height: 80px;
+    font-size: 0.875rem;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    height: 70px;
+    min-height: 70px;
+    font-size: 0.75rem;
+    padding: 0.125rem;
+  }
 `;
 
 const DayNumber = styled.div`
   font-size: 1.25rem;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.dark};
+  margin-bottom: 0.25rem;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    font-size: 1rem;
+    margin-bottom: 0.125rem;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    font-size: 0.875rem;
+    margin-bottom: 0;
+  }
 `;
 
 const DayContent = styled.div`
@@ -558,10 +619,30 @@ const DayStat = styled.div`
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100%;
-  font-size: 1rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.dark};
+  color: ${({ theme, color }) => color ? theme.colors[color] : theme.colors.dark};
+  margin-bottom: 0.125rem;
+  
+  span {
+    margin-right: 0.25rem;
+    font-size: 0.875rem;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    font-size: 0.625rem;
+    
+    span {
+      font-size: 0.75rem;
+      margin-right: 0.125rem;
+    }
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    span {
+      display: none; /* Hide icons on very small screens */
+    }
+  }
 `;
 
 const EmptyDayContent = styled.div`
@@ -572,6 +653,19 @@ const EmptyDayContent = styled.div`
   width: 100%;
   height: 100%;
   color: ${({ theme }) => theme.colors.neutral};
+`;
+
+const SetupLink = styled.div`
+  margin-top: 0.5rem;
+  text-align: center;
+`;
+
+const StyledLink = styled(Link)`
+  text-decoration: none;
+  
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 export default MonthlyReport;

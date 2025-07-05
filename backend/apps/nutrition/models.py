@@ -2,6 +2,20 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth.models import User
+from datetime import date
+
+def get_current_date():
+    """Get current date without timezone conversion issues"""
+    return date.today()
+
+def get_user_current_date(user=None):
+    """Get current date in user's timezone if available, otherwise server local date"""
+    if user and hasattr(user, 'profile') and user.profile:
+        try:
+            return user.profile.get_current_date()
+        except:
+            pass
+    return date.today()
 
 class WeightEntry(models.Model):
     """Model for daily weight tracking"""
@@ -10,7 +24,7 @@ class WeightEntry(models.Model):
         on_delete=models.CASCADE,
         related_name='weight_entries'
     )
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=get_current_date)
     weight = models.FloatField(help_text="Weight in kg")
 
     class Meta:
@@ -35,7 +49,7 @@ class MealEntry(models.Model):
         related_name='meal_entries',
         null=True # Allow null temporarily for migration
     )
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=get_current_date)
     meal_type = models.CharField(max_length=10, choices=MEAL_TYPES)
     description = models.CharField(max_length=255) # Consider making this optional or pre-filled
     calories = models.PositiveIntegerField()
@@ -60,7 +74,7 @@ class ExerciseEntry(models.Model):
         related_name='exercise_entries',
         null=True # Allow null temporarily for migration
     )
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=get_current_date)
     description = models.CharField(max_length=255)
     calories_burned = models.PositiveIntegerField()
     duration_minutes = models.PositiveIntegerField()

@@ -25,6 +25,7 @@ const api = axios.create({
     process.env.REACT_APP_API_URL.replace(/\/api$/, '') : 
     'http://localhost:8000',
   timeout: 10000, // 10 seconds timeout
+  withCredentials: true, // Include cookies for session-based features like WebAuthn
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -74,35 +75,31 @@ api.interceptors.response.use(
 
       const refreshToken = localStorage.getItem('refreshToken');
       if (!refreshToken) {
-        console.log("No refresh token found, redirecting to login.");
-        isRefreshing = false;
-        // Optional: Redirect to login or handle logout
-        // window.location.href = '/login'; 
+        // Clear tokens and redirect to login
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        delete api.defaults.headers.common['Authorization'];
+        // Optional: Redirect to login page
+        // window.location.href = '/login';
         return Promise.reject(error);
       }
 
+      // Attempt token refresh
       try {
-        console.log("Attempting token refresh...");
-        // Use a separate axios instance for refresh to avoid interceptor loop
-        // Get base URL without /api suffix if present
-        let baseUrl = process.env.REACT_APP_API_URL ? 
-          process.env.REACT_APP_API_URL.replace(/\/api$/, '') : 
-          'http://localhost:8000';
-          
-        const refreshResponse = await axios.post(
-            `${baseUrl}/api/token/refresh/`, 
-            { refresh: refreshToken }
-        ); 
-        
-        const newAccessToken = refreshResponse.data.access;
-        console.log("Token refresh successful.");
-        localStorage.setItem('accessToken', newAccessToken);
-        api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
-        originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
-        
-        processQueue(null, newAccessToken); // Process queued requests with new token
-        return api(originalRequest); // Retry original request
+        const refreshResponse = await axios.post('/api/token/refresh/', {
+          refresh: refreshToken,
+        });
 
+        // Update tokens
+        const newAccessToken = refreshResponse.data.access;
+        localStorage.setItem('accessToken', newAccessToken);
+        
+        // Update the authorization header for subsequent requests
+        api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+        
+        // Retry the original request with the new token
+        error.config.headers['Authorization'] = `Bearer ${newAccessToken}`;
+        return api.request(error.config);
       } catch (refreshError) {
         console.error("Token refresh failed:", refreshError);
         localStorage.removeItem('accessToken');

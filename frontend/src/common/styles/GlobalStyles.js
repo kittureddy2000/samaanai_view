@@ -2,14 +2,16 @@ import { createGlobalStyle } from 'styled-components';
 
 export const theme = {
   colors: {
-    primary: '#4CAF50', // Green for healthy theme
-    secondary: '#2196F3', // Blue for accents
-    warning: '#FFC107', // Yellow for warnings
-    danger: '#F44336', // Red for errors/negative
-    neutral: '#607D8B', // Bluish gray for neutral elements
-    light: '#F5F5F5', // Light gray for backgrounds
-    dark: '#263238', // Dark color for text
-    white: '#FFFFFF', // White
+    primary: '#2196F3', // Changed from green to blue for main actions and emphasis
+    secondary: '#1976D2', // Darker blue for accents and secondary elements
+    warning: '#FFC107', // Keep yellow for warnings
+    danger: '#F44336', // Keep red for errors/negative
+    success: '#4CAF50', // Add green as success color (formerly primary)
+    info: '#00BCD4', // Light blue/cyan for informational elements
+    neutral: '#607D8B', // Keep bluish gray for neutral elements
+    light: '#F5F5F5', // Keep light gray for backgrounds
+    dark: '#263238', // Keep dark color for text
+    white: '#FFFFFF', // Keep white
   },
   fonts: {
     body: "'Roboto', 'Segoe UI', sans-serif",
@@ -20,6 +22,7 @@ export const theme = {
     sm: '768px',
     md: '992px',
     lg: '1200px',
+    xl: '1440px',
   },
   shadows: {
     small: '0 2px 4px rgba(0,0,0,0.1)',
@@ -63,6 +66,8 @@ export const GlobalStyles = createGlobalStyle`
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    height: 100vh;         /* lock body to viewport height */
+    overflow: hidden;      /* prevent outer scrollbar; inner panes handle scrolling */
   }
   
   h1, h2, h3, h4, h5, h6 {

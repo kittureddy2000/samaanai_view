@@ -1,0 +1,1 @@
+# This file makes Django recognize the 'apps' directory as a package 

@@ -6,7 +6,8 @@ import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { format, parseISO } from 'date-fns';
 
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../../common/auth';
+import PasskeyManager from '../components/PasskeyManager';
 import {
   Card,
   Button,
@@ -25,15 +26,6 @@ const Profile = () => {
   const { currentUser, updateProfile, updateMetrics, error: authError, setError } = useAuth();
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  // Debug useEffect to check currentUser and profile on load
-  useEffect(() => {
-    console.log('Current User Object:', currentUser);
-    console.log('Has profile?', currentUser && !!currentUser.profile);
-    if (currentUser && currentUser.profile) {
-      console.log('Profile data:', currentUser.profile);
-    }
-  }, [currentUser]);
   
   // Calculate BMR based on user data
   const calculateBMR = () => {
@@ -100,16 +92,26 @@ const Profile = () => {
         setError('');
       }
       
-      // For simplicity, we'll combine updateProfile and updateMetrics
-      // First update metrics data
-      await updateMetrics({
-        weight: values.weight,
-        height: values.height,
+      // Prepare metrics data with proper type conversion
+      const metricsData = {
+        weight: values.weight ? parseFloat(values.weight) : null,
+        height: values.height ? parseFloat(values.height) : null,
         date_of_birth: values.dateOfBirth ? format(values.dateOfBirth, 'yyyy-MM-dd') : null,
-        metabolic_rate: values.metabolicRate,
-        weight_loss_goal: values.weightLossGoal,
-        start_of_week: values.startOfWeek
+        metabolic_rate: values.metabolicRate ? parseInt(values.metabolicRate, 10) : null,
+        weight_loss_goal: parseFloat(values.weightLossGoal),
+        start_of_week: parseInt(values.startOfWeek, 10),
+        timezone: values.timezone,
+      };
+      
+      // Remove null values to avoid backend validation issues
+      Object.keys(metricsData).forEach(key => {
+        if (metricsData[key] === null || metricsData[key] === '') {
+          delete metricsData[key];
+        }
       });
+      
+      // First update metrics data
+      await updateMetrics(metricsData);
       
       // Then update profile data
       await updateProfile({
@@ -121,6 +123,13 @@ const Profile = () => {
       setSuccessMessage('Profile updated successfully!');
     } catch (err) {
       console.error('Error updating profile:', err);
+      
+      // Enhanced error logging
+      if (err.response) {
+        console.error('Response status:', err.response.status);
+        console.error('Response data:', err.response.data);
+      }
+      
       if (typeof setError === 'function') {
         setError(err.message || 'Failed to update profile.');
       } else {
@@ -136,7 +145,7 @@ const Profile = () => {
   }
   
   return (
-    <div>
+    <ProfileContainer>
       <Title>User Profile</Title>
       
       {authError && (
@@ -170,6 +179,7 @@ const Profile = () => {
             
             // Report Settings
             startOfWeek: currentUser?.profile?.start_of_week !== undefined ? currentUser.profile.start_of_week : 2,
+            timezone: currentUser?.profile?.timezone || 'US/Pacific',
           }}
           validationSchema={Yup.object({
             // User Information Validation
@@ -404,6 +414,31 @@ const Profile = () => {
                 ) : null}
               </FormGroup>
               
+              <FormGroup>
+                <Label htmlFor="timezone">
+                  Timezone
+                </Label>
+                <Field
+                  as="select"
+                  id="timezone"
+                  name="timezone"
+                  className="form-select"
+                >
+                  <option value="US/Pacific">Pacific Time (PT)</option>
+                  <option value="US/Mountain">Mountain Time (MT)</option>
+                  <option value="US/Central">Central Time (CT)</option>
+                  <option value="US/Eastern">Eastern Time (ET)</option>
+                  <option value="UTC">UTC</option>
+                  <option value="Europe/London">London</option>
+                  <option value="Europe/Paris">Paris</option>
+                  <option value="Asia/Tokyo">Tokyo</option>
+                  <option value="Australia/Sydney">Sydney</option>
+                </Field>
+                {errors.timezone && touched.timezone ? (
+                  <ErrorText>{errors.timezone}</ErrorText>
+                ) : null}
+              </FormGroup>
+              
               <CalorieTarget>
                 <CalorieTargetTitle>Daily Calorie Target:</CalorieTargetTitle>
                 <CalorieTargetValue>
@@ -434,6 +469,9 @@ const Profile = () => {
         </Formik>
       </Card>
       
+      {/* Passkey Manager */}
+      <PasskeyManager />
+      
       {/* Info Card */}
       <Card>
         <InfoBox>
@@ -457,7 +495,7 @@ const Profile = () => {
           </InfoContent>
         </InfoBox>
       </Card>
-    </div>
+    </ProfileContainer>
   );
 };
 
@@ -471,7 +509,7 @@ const ErrorBanner = styled.div`
 `;
 
 const SuccessBanner = styled.div`
-  background-color: ${({ theme }) => theme.colors.primary};
+  background-color: ${({ theme }) => theme.colors.success};
   color: white;
   padding: 0.75rem 1rem;
   border-radius: ${({ theme }) => theme.borderRadius.medium};
@@ -488,6 +526,16 @@ const ButtonContainer = styled.div`
   display: flex;
   justify-content: flex-end;
   margin-top: 2rem;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    justify-content: stretch;
+    
+    button {
+      width: 100%;
+      padding: 1rem 2rem;
+      font-size: 1.1rem;
+    }
+  }
 `;
 
 const RequiredIndicator = styled.span`
@@ -539,11 +587,13 @@ const SuggestionBox = styled.div`
   
   @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    padding: 1.25rem;
+    text-align: center;
     
     button {
       margin-top: 1rem;
-      align-self: flex-end;
+      width: 100%;
     }
   }
 `;
@@ -623,8 +673,13 @@ const CalorieTarget = styled.div`
   
   @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     text-align: center;
+    padding: 1.5rem;
+    
+    > div:first-child {
+      margin-bottom: 1rem;
+    }
   }
 `;
 
@@ -667,6 +722,14 @@ const InfoContent = styled.div`
   
   p:last-child {
     margin-bottom: 0;
+  }
+`;
+
+const ProfileContainer = styled.div`
+  padding-bottom: 2rem;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding-bottom: 1rem;
   }
 `;
 

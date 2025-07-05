@@ -16,7 +16,7 @@ import {
 } from 'chart.js';
 
 import nutritionService from '../services/nutritionService';
-// import { useAuth } from '../contexts/AuthContext'; // Removed unused import
+// import { useAuth } from '../../../common/auth'; // Removed unused import
 import {
   Card,
   Button,
@@ -41,6 +41,13 @@ ChartJS.register(
   Legend
 );
 
+// Helper function to parse date strings as local dates (not UTC)
+const parseLocalDate = (dateString) => {
+  // Parse YYYY-MM-DD as local date, not UTC
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day); // month is 0-indexed in Date constructor
+};
+
 const WeightTracking = () => {
   // const { currentUser } = useAuth(); // currentUser seems unused, commenting out
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -58,8 +65,10 @@ const WeightTracking = () => {
     try {
       setLoading(true);
       setError('');
-      const data = await nutritionService.getWeightHistory();
-      setWeightHistory(data);
+      const resp = await nutritionService.getWeightHistory();
+      // Handle possible paginated or object response
+      const historyArray = resp?.results || resp || [];
+      setWeightHistory(Array.isArray(historyArray) ? historyArray : []);
     } catch (err) {
       console.error('Error fetching weight history:', err);
       setError('Failed to fetch weight history. Please try again later.');
@@ -85,17 +94,25 @@ const WeightTracking = () => {
     }
   };
 
-  const chartData = {
-    labels: weightHistory.map(entry => format(new Date(entry.date), 'MMM d')),
-    datasets: [
-      {
-        label: 'Weight (kg)',
-        data: weightHistory.map(entry => entry.weight),
-        borderColor: 'rgb(75, 192, 192)',
-        tension: 0.1
-      }
-    ]
-  };
+  const chartData = React.useMemo(() => {
+    if (!Array.isArray(weightHistory) || weightHistory.length === 0) {
+      return {
+        labels: [],
+        datasets: []
+      };
+    }
+    return {
+      labels: weightHistory.map(entry => format(parseLocalDate(entry.date), 'MMM d')),
+      datasets: [
+        {
+          label: 'Weight (kg)',
+          data: weightHistory.map(entry => entry.weight),
+          borderColor: 'rgb(33, 150, 243)',
+          tension: 0.1
+        }
+      ]
+    };
+  }, [weightHistory]);
 
   const chartOptions = {
     responsive: true,
@@ -197,6 +214,14 @@ const LoadingWrapper = styled.div`
 const ChartContainer = styled.div`
   height: 400px;
   width: 100%;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    height: 300px;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    height: 250px;
+  }
 `;
 
 export default WeightTracking; 

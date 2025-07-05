@@ -53,9 +53,9 @@ describe('DailyEntry Component', () => {
     
     // Check for main sections
     expect(screen.getByText('Log Calories')).toBeInTheDocument();
-    expect(screen.getByText('Food')).toBeInTheDocument();
-    expect(screen.getByText('Exercise')).toBeInTheDocument();
-    expect(screen.getByText('Net Calories')).toBeInTheDocument();
+    expect(screen.getAllByText('Food')).toHaveLength(2); // Desktop and mobile versions
+    expect(screen.getAllByText('Exercise')).toHaveLength(2); // Desktop and mobile versions
+    expect(screen.getAllByText('Net Calories')).toHaveLength(2); // Desktop and mobile versions
   });
 
   test('submits meal entries successfully', async () => {
@@ -107,10 +107,10 @@ describe('DailyEntry Component', () => {
     
     // Just check that the Food and Exercise sections are rendered with any calorie values
     await waitFor(() => {
-      // Find the food section
-      expect(screen.getByText('Food')).toBeInTheDocument();
-      // Find the exercise section
-      expect(screen.getByText('Exercise')).toBeInTheDocument();
+      // Find the food sections (desktop and mobile)
+      expect(screen.getAllByText('Food')).toHaveLength(2);
+      // Find the exercise sections (desktop and mobile)
+      expect(screen.getAllByText('Exercise')).toHaveLength(2);
       // Look for any calorie text
       expect(screen.getAllByText(/cal/i).length).toBeGreaterThan(0);
     });

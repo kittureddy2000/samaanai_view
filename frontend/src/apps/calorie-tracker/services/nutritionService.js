@@ -1,41 +1,23 @@
-import api from './api';
+import { api } from '../../../common/auth';
 
 // Helper function to format dates consistently
 const formatDateForAPI = (date) => {
-  // Ensure we're working with a Date object
-  const dateObj = new Date(date);
+  // Convert Date object to YYYY-MM-DD format in local time
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const formatted = `${year}-${month}-${day}`;
   
-  // CRITICAL FIX: Use LOCAL date components, not UTC
-  // This ensures what the user sees in the UI matches what is sent to the backend
-  const year = dateObj.getFullYear();
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0'); // Month is zero-indexed, so add 1
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  
-  // Format as YYYY-MM-DD
-  const formattedDate = `${year}-${month}-${day}`;
-  
-  // Log debugging information
-  console.log(`Formatting date for API:`, {
-    originalDate: dateObj,
-    timeZoneOffset: dateObj.getTimezoneOffset(),
-    formattedDate: formattedDate
-  });
-  
-  return formattedDate;
+  return formatted;
 };
 
 export const nutritionService = {
   // Daily Report (replaces getDailyEntry)
   getDailyReport: async (date) => {
     const formattedDate = formatDateForAPI(date);
-    console.log(`Fetching daily report for: ${formattedDate}`);
-    
-    // DEBUG: Log the api import to see where it's coming from
-    console.log('nutritionService is using api:', api);
     
     // Now we need to include /api prefix since baseURL no longer includes it
-    const url = `api/samaanai/reports/daily?date=${formattedDate}`;
-    console.log(`Final API URL: ${url}`);
+    const url = `/api/samaanai/reports/daily?date=${formattedDate}`;
     const response = await api.get(url);
     return response.data;
   },
@@ -55,16 +37,16 @@ export const nutritionService = {
     // For simplicity now, assuming POST will create, and DailyEntry.js will manage existing IDs for updates.
     if (mealData.id) {
         const { id, ...data } = mealData;
-        const response = await api.put(`api/samaanai/meals/${id}/`, data);
+        const response = await api.put(`/api/samaanai/meals/${id}/`, data);
         return response.data;
     } else {
-        const response = await api.post('api/samaanai/meals/', mealData);
+        const response = await api.post('/api/samaanai/meals/', mealData);
         return response.data;
     }
   },
   
   deleteMealEntry: async (id) => {
-    const response = await api.delete(`api/samaanai/meals/${id}/`);
+    const response = await api.delete(`/api/samaanai/meals/${id}/`);
     return response.data; // Or just status
   },
   
@@ -77,22 +59,22 @@ export const nutritionService = {
     
     if (exerciseData.id) {
         const { id, ...data } = exerciseData;
-        const response = await api.put(`api/samaanai/exercises/${id}/`, data);
+        const response = await api.put(`/api/samaanai/exercises/${id}/`, data);
         return response.data;
     } else {
-        const response = await api.post('api/samaanai/exercises/', exerciseData);
+        const response = await api.post('/api/samaanai/exercises/', exerciseData);
         return response.data;
     }
   },
   
   deleteExerciseEntry: async (id) => {
-    const response = await api.delete(`api/samaanai/exercises/${id}/`);
+    const response = await api.delete(`/api/samaanai/exercises/${id}/`);
     return response.data; // Or just status
   },
 
   // Weight Entries
   getWeightHistory: async (date) => { // Optional date filter, or fetch all for user
-    let url = 'api/samaanai/weight-entries/';
+    let url = '/api/samaanai/weight-entries/';
     if (date) {
         const formattedDate = formatDateForAPI(date);
         url += `?date=${formattedDate}`;
@@ -112,12 +94,12 @@ export const nutritionService = {
     // If an ID is present and you want to explicitly PUT:
     if (weightData.id) {
         const { id, ...data } = weightData;
-        const response = await api.put(`api/samaanai/weight-entries/${id}/`, data); 
+        const response = await api.put(`/api/samaanai/weight-entries/${id}/`, data); 
         return response.data;
     }
     // The backend WeightEntryViewSet handles upsert on POST if unique_together (user,date) is met.
     // If not, this POST will create a new entry.
-    const response = await api.post('api/samaanai/weight-entries/', weightData);
+    const response = await api.post('/api/samaanai/weight-entries/', weightData);
     return response.data;
   },
   
@@ -128,7 +110,7 @@ export const nutritionService = {
       const formattedDate = formatDateForAPI(date);
       params = `?date=${formattedDate}`; // Or start_date based on backend API
     }
-    const response = await api.get(`api/samaanai/reports/weekly${params}`);
+    const response = await api.get(`/api/samaanai/reports/weekly${params}`);
     return response.data;
   },
   
@@ -137,7 +119,7 @@ export const nutritionService = {
     if (month && year) {
       params = `?month=${month}&year=${year}`;
     }
-    const response = await api.get(`api/samaanai/reports/monthly${params}`);
+    const response = await api.get(`/api/samaanai/reports/monthly${params}`);
     return response.data;
   },
   
@@ -146,7 +128,7 @@ export const nutritionService = {
     if (year) {
       params = `?year=${year}`;
     }
-    const response = await api.get(`api/samaanai/reports/yearly${params}`);
+    const response = await api.get(`/api/samaanai/reports/yearly${params}`);
     return response.data;
   }
 };

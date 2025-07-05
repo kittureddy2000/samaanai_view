@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Finance App Notification{% endblock %}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8fafc;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1976d2;
+            margin-bottom: 10px;
+        }
+        .alert-high {
+            background-color: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .alert-warning {
+            background-color: #fffbeb;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .alert-info {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .amount {
+            font-weight: 600;
+            font-size: 18px;
+        }
+        .amount.positive {
+            color: #059669;
+        }
+        .amount.negative {
+            color: #dc2626;
+        }
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .stats-table th,
+        .stats-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .stats-table th {
+            background-color: #f8fafc;
+            font-weight: 600;
+        }
+        .button {
+            display: inline-block;
+            background-color: #1976d2;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            margin: 15px 0;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        .unsubscribe {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">💰 FinanceApp</div>
+            <div>Financial Management</div>
+        </div>
+        
+        {% block content %}
+        {% endblock %}
+        
+        <div class="footer">
+            <p>You received this email because you have notifications enabled in your FinanceApp settings.</p>
+            <p><a href="{{ settings_url|default:'#' }}" style="color: #1976d2;">Manage notification preferences</a></p>
+            <div class="unsubscribe">
+                If you no longer wish to receive these emails, you can disable them in your account settings.
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

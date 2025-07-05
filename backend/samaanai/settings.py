@@ -15,6 +15,7 @@ import logging
 from datetime import timedelta
 import dj_database_url
 from urllib.parse import urlparse
+from decouple import config
 
 # --- Setup logger ---
 logger = logging.getLogger(__name__)
@@ -42,164 +43,95 @@ env = environ.Env(
 
 # Load the .env file if it exists (primarily for development)
 env_file = os.path.join(BASE_DIR.parent, '.env')  # Check for .env in project root
-logger.info(f"Looking for .env file at: {env_file}")
-logger.info(f"BASE_DIR is: {BASE_DIR}")
-logger.info(f"BASE_DIR.parent is: {BASE_DIR.parent}")
-logger.info(f"Current working directory: {os.getcwd()}")
-
-# Check if file exists
-if os.path.isfile(env_file):
-    logger.info(f".env file found at {env_file}")
+if os.path.exists(env_file):
     try:
-        env.read_env(env_file)
-        logger.info(".env file loaded from project root")
+        environ.Env.read_env(env_file)
     except Exception as e:
         logger.error(f"Error reading .env file: {str(e)}")
 else:
-    logger.warning(f".env file not found at {env_file}")
-    # Try in current directory as fallback
-    env_file = os.path.join(BASE_DIR, '.env')
-    logger.info(f"Looking for .env file at: {env_file}")
-    if os.path.isfile(env_file):
-        logger.info(f".env file found at {env_file}")
+    # Try other locations
+    env_file = os.path.join(BASE_DIR, '.env')  # Check in app directory
+    if os.path.exists(env_file):
         try:
-            env.read_env(env_file)
-            logger.info(".env file loaded from app directory")
+            environ.Env.read_env(env_file)
         except Exception as e:
             logger.error(f"Error reading .env file: {str(e)}")
     else:
-        logger.warning(f".env file not found at {env_file}")
-        
-        # Last resort: check in /app directly
+        # Try /app directory (for Docker)
         env_file = '/app/.env'
-        logger.info(f"Looking for .env file at: {env_file}")
-        if os.path.isfile(env_file):
-            logger.info(f".env file found at {env_file}")
+        if os.path.exists(env_file):
             try:
-                env.read_env(env_file)
-                logger.info(".env file loaded from /app directory")
+                environ.Env.read_env(env_file)
             except Exception as e:
                 logger.error(f"Error reading .env file: {str(e)}")
-        else:
-            logger.warning(f".env file not found at {env_file}")
-            logger.warning("No .env file found in any of the checked locations")
 
-# Determine the environment ('development' or 'production')
+# Environment variable
 ENVIRONMENT = env('ENVIRONMENT', default='development')
-logger.info(f"Environment: {ENVIRONMENT}")
 
-# --- Environment-Specific Settings ---
-SECRET_KEY = None
-DB_PASSWORD = None
-GS_CREDENTIALS = None # For GCS Storage
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = env('SECRET_KEY', default=None)
+DB_PASSWORD = env('DB_PASSWORD', default=None)
 
-if ENVIRONMENT in ['development', 'test']:
-    logger.info('Configuring for Development/Test Environment')
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'backend'] 
-    DEBUG = env.bool('DEBUG', default=True) 
-
-    SECRET_KEY = env('SECRET_KEY', default='django-insecure-dev-key-calorie-tracker')
-    logger.info(f"SECRET_KEY loaded: {'set' if SECRET_KEY else 'not set'}")
-    DB_PASSWORD = env('DB_PASSWORD', default='testpass123') 
-    logger.info(f"DB_PASSWORD loaded: {'set' if DB_PASSWORD else 'not set'}")
-    PROJECT_ID = env('PROJECT_ID', default=None) 
-    logger.info(f"PROJECT_ID: {PROJECT_ID}")
-
-    EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
-    EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
-
-    STATIC_URL = '/static/'
-    STATIC_ROOT = BASE_DIR.parent / 'staticfiles' 
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = BASE_DIR.parent / 'media'
-
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
-    logger.info(f"CORS_ALLOWED_ORIGINS: {CORS_ALLOWED_ORIGINS}")
+if ENVIRONMENT.lower() in ['development', 'test']:
+    DEBUG = env.bool('DEBUG', default=True)
+    PROJECT_ID = env('PROJECT_ID', default='samaanai-dev')
+    FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
     
-else: # Production (Cloud Run)
-    logger.info('Configuring for PRODUCTION Environment (Cloud Run)')
+    # CORS configuration for development
+    CORS_ALLOWED_ORIGINS = [
+        FRONTEND_URL,
+        "http://localhost:3000",
+        "https://localhost",
+        "https://localhost:3000",
+    ]
+    
+elif ENVIRONMENT.lower() == 'production':
     DEBUG = env.bool('DEBUG', default=False)
-
-    # --- Google Cloud Project ---
+    
+    # Get project ID from environment or Google Cloud metadata
     try:
         _, PROJECT_ID = google.auth.default()
-        logger.info(f"Google Cloud project: {PROJECT_ID}")
-    except google.auth.exceptions.DefaultCredentialsError as e:
+    except Exception as e:
         logger.error(f"Could not get default credentials: {str(e)}")
-        PROJECT_ID = env('PROJECT_ID', default=None) 
-
-    if not PROJECT_ID:
-         logger.error("PROJECT_ID not found in environment or default credentials.")
-         raise Exception("PROJECT_ID not found in environment or default credentials.")
+        PROJECT_ID = env('PROJECT_ID', default=None)
+        if not PROJECT_ID:
+            logger.error("PROJECT_ID not found in environment or default credentials.")
+            raise ValueError("PROJECT_ID must be set for production deployment")
+    
+    # Production secrets
+    SECRET_KEY = env('SECRET_KEY', default=None)
+    DB_PASSWORD = env('DB_PASSWORD', default=None)
+    
+    # Cloud Storage configuration
+    try:
+        GS_CREDENTIALS = service_account.Credentials.from_service_account_info(
+            json.loads(env('GOOGLE_APPLICATION_CREDENTIALS'))
+        )
+    except (KeyError, json.JSONDecodeError, ValueError) as e:
+        logger.warning("GOOGLE_APPLICATION_CREDENTIALS not found. Using default ADC for GCS.")
+        GS_CREDENTIALS = None
+    except Exception as e:
+        logger.error(f"Failed to load GCS service account credentials: {e}")
+        GS_CREDENTIALS = None
+    
+    # Static files (Google Cloud Storage)
+    if GS_CREDENTIALS:
+        DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
+        STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
+        GS_BUCKET_NAME = env('GS_BUCKET_NAME', default=f'{PROJECT_ID}-static')
+        GS_CREDENTIALS = GS_CREDENTIALS
+    
+    # Production security settings
+    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+    
+    FRONTEND_URL = env('FRONTEND_URL', default='https://your-frontend-domain.com')
+    
+    # CORS and CSRF settings
+    CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[FRONTEND_URL])
+    CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[FRONTEND_URL])
 
     EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
     EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
-
-    # --- Secrets from Cloud Run Environment Variables ---
-    # When using --set-secrets in Cloud Run, secrets are mounted as environment variables
-    SECRET_KEY = env('SECRET_KEY', default=None)
-    logger.info(f"SECRET_KEY loaded: {'set' if SECRET_KEY else 'not set'}")
-    DB_PASSWORD = env('DB_PASSWORD', default=None)
-    logger.info(f"DB_PASSWORD loaded: {'set' if DB_PASSWORD else 'not set'}")
-    
-    # Google Cloud Storage credentials (optional)
-    try:
-        gcs_sa_key_content = env('GOOGLE_APPLICATION_CREDENTIALS', default=None)
-        if gcs_sa_key_content:
-            service_account_info = json.loads(gcs_sa_key_content)
-            GS_CREDENTIALS = service_account.Credentials.from_service_account_info(service_account_info)
-            logger.info("Successfully loaded GCS service account credentials from environment variable.")
-        else:
-            logger.warning("GOOGLE_APPLICATION_CREDENTIALS not found. Using default ADC for GCS.")
-            GS_CREDENTIALS = None
-    except Exception as e:
-        logger.error(f"Failed to load GCS service account credentials: {e}")
-        GS_CREDENTIALS = None 
-
-    # --- Static/Media Storage: Google Cloud Storage ---
-    logger.info("Static/Media Storage: Google Cloud Storage")
-    DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-    STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-    GS_BUCKET_NAME = env('GS_BUCKET_NAME') 
-    logger.info(f"GS_BUCKET_NAME: {GS_BUCKET_NAME}")
-    STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/static/'
-    MEDIA_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/media/'
-
-    # --- Cloud Run Specific Settings ---
-    cloudrun_url = env("CLOUDRUN_SERVICE_URL", default=None)
-    if cloudrun_url:
-         ALLOWED_HOSTS = [urlparse(cloudrun_url).netloc, '.samaanai.com'] 
-    else:
-         # Add the known Cloud Run URL pattern and fallback domains
-         ALLOWED_HOSTS = [
-             'samaanai-backend-1074693546571.us-west1.run.app',
-             '.run.app',
-             '.samaanai.com',
-             'localhost',
-             '127.0.0.1'
-         ]
-    logger.info(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
-
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-    # Trust the Cloud Run URL and potentially the custom domain
-    CSRF_TRUSTED_ORIGINS = []
-    if cloudrun_url:
-        CSRF_TRUSTED_ORIGINS.append(cloudrun_url)
-    
-    # Add frontend URL to CORS and CSRF trusted origins
-    frontend_url = env('FRONTEND_URL', default='https://samaanai-frontend-1074693546571.us-west1.run.app')
-    CSRF_TRUSTED_ORIGINS.append(frontend_url)
-    
-    logger.info(f"CSRF_TRUSTED_ORIGINS: {CSRF_TRUSTED_ORIGINS}")
-
-    CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS 
 
     # --- Google Cloud Logging ---
     try:
@@ -241,6 +173,8 @@ INSTALLED_APPS = [
     # Local apps (Calorie Tracker)
     'apps.users.apps.UsersConfig',
     'apps.nutrition.apps.NutritionConfig',
+    'apps.finance.apps.FinanceConfig',
+    'apps.notifications',  # Add notifications app
     'social_django',
 ]
 
@@ -303,6 +237,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 50
 }
 
 # Simple JWT settings
@@ -329,6 +265,25 @@ USE_TZ = True
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Media files (user uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Static files finders
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
+# Additional static files directories
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 
 # Logging Configuration
 LOGGING = {
@@ -371,11 +326,17 @@ LOGGING = {
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
+        'notifications': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
     }
 }
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
+CORS_ALLOW_ALL_ORIGINS = False  # Cannot use wildcard with credentials
+CORS_ALLOW_CREDENTIALS = True  # Allow cookies and authentication headers
 
 # Google OAuth Configuration
 AUTHENTICATION_BACKENDS = [
@@ -388,9 +349,22 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = env('GOOGLE_CLIENT_SECRET', default='')
 SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ['email', 'profile']
 SOCIAL_AUTH_URL_NAMESPACE = 'social'
 
+# Validate Google OAuth credentials
+if not SOCIAL_AUTH_GOOGLE_OAUTH2_KEY:
+    logger.warning("GOOGLE_CLIENT_ID is not set. Google OAuth will not work.")
+if not SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET:
+    logger.warning("GOOGLE_CLIENT_SECRET is not set. Google OAuth will not work.")
+
 if ENVIRONMENT == 'development':
-    SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'http://localhost:8000/api/auth/social/complete/google-oauth2/'
-    SOCIAL_AUTH_REDIRECT_IS_HTTPS = False
+    # Use HTTPS redirect URI if FRONTEND_URL is HTTPS, otherwise use HTTP
+    if FRONTEND_URL.startswith('https://'):
+        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://localhost/api/auth/social/complete/google-oauth2/'
+        SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
+        logger.info("Using HTTPS OAuth redirect for development")
+    else:
+        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'http://localhost:8000/api/auth/social/complete/google-oauth2/'
+        SOCIAL_AUTH_REDIRECT_IS_HTTPS = False
+        logger.info("Using HTTP OAuth redirect for development")
 else:
     # Production Google OAuth configuration - construct from environment variable or use a default
     cloudrun_url = env("CLOUDRUN_SERVICE_URL", default=None)
@@ -401,7 +375,7 @@ else:
         SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://samaanai-backend-1074693546571.us-west1.run.app/api/auth/social/complete/google-oauth2/'
     SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
 
-SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/api/auth/social/token/'
+# SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/api/auth/social/token/' # Commented out
 
 SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_details',
@@ -409,10 +383,95 @@ SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.auth_allowed',
     'social_core.pipeline.social_auth.social_user',
     'social_core.pipeline.user.get_username',
-    'social_core.pipeline.user.create_user',
-    'social_core.pipeline.social_auth.associate_user',
+    # Ensure 'apps.users.pipeline.generate_tokens_and_redirect_to_frontend' 
+    # is AFTER user creation and association.
+    'social_core.pipeline.user.create_user', # Creates user if new
+    'social_core.pipeline.social_auth.associate_user', # Associates social account with user
     'social_core.pipeline.social_auth.load_extra_data',
     'social_core.pipeline.user.user_details',
+    'apps.users.pipeline.generate_tokens_and_redirect_to_frontend',
 )
-# Add the FRONTEND_URL setting
-FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
+
+# --- Plaid Configuration ---
+PLAID_CLIENT_ID = os.environ.get('PLAID_CLIENT_ID')
+PLAID_SECRET_SANDBOX = os.environ.get('PLAID_SECRET_SANDBOX') # For Sandbox environment
+PLAID_SECRET_PRODUCTION = os.environ.get('PLAID_SECRET_PRODUCTION')   # For Production
+PLAID_ENV = os.environ.get('PLAID_ENV', 'sandbox') # e.g., 'sandbox', 'development', 'production'
+PLAID_API_VERSION = '2020-09-14' # Specify your desired Plaid API version
+
+# Add some simple logging to debug Plaid configuration
+logger.info(f"PLAID_CLIENT_ID loaded in settings: {PLAID_CLIENT_ID}")
+logger.info(f"PLAID_SECRET_SANDBOX loaded in settings: {'SET' if PLAID_SECRET_SANDBOX else 'NOT SET'}")
+logger.info(f"PLAID_SECRET_PRODUCTION loaded in settings: {'SET' if PLAID_SECRET_PRODUCTION else 'NOT SET'}")
+logger.info(f"PLAID_ENV loaded in settings: {PLAID_ENV}")
+logger.info(f"PLAID_API_VERSION loaded in settings: {PLAID_API_VERSION}")
+
+# You might also want to define your webhook URL if you're using webhooks
+PLAID_WEBHOOK_URL = os.environ.get('PLAID_WEBHOOK_URL')
+
+# --- Email Configuration (SendGrid) ---
+SENDGRID_API_KEY = env('SENDGRID_API_KEY', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@financeapp.com')
+
+if SENDGRID_API_KEY:
+    # Use SendGrid as email backend
+    EMAIL_BACKEND = 'sendgrid_backend.SendgridBackend'
+    SENDGRID_API_KEY = SENDGRID_API_KEY
+    logger.info("SendGrid email backend configured")
+else:
+    # Fallback to console backend for development
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    logger.warning("SendGrid API key not configured. Using console email backend.")
+
+# Email configuration for SMTP fallback (if needed)
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.sendgrid.net')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='apikey')  # For SendGrid, this is always 'apikey'
+EMAIL_HOST_PASSWORD = SENDGRID_API_KEY  # Use SendGrid API key as password
+
+# --- Notification Settings ---
+# Template directories
+TEMPLATES[0]['DIRS'] = [
+    BASE_DIR / 'templates',  # Add templates directory
+]
+
+# Add notifications to loggers
+LOGGING['loggers']['notifications'] = {
+    'handlers': ['console'],
+    'level': 'DEBUG' if DEBUG else 'INFO',
+    'propagate': False,
+}
+
+# HTTPS/SSL Settings for reverse proxy
+# Enable these when running behind NGINX with HTTPS
+SECURE_PROXY_SSL_HEADER = None
+SECURE_SSL_REDIRECT = False
+
+# Check if we're behind a reverse proxy with HTTPS
+if config('SECURE_PROXY_SSL_HEADER_NAME', default=''):
+    SECURE_PROXY_SSL_HEADER = (
+        config('SECURE_PROXY_SSL_HEADER_NAME'),
+        config('SECURE_PROXY_SSL_HEADER_VALUE', default='https')
+    )
+
+# Only enable SSL redirect in production or when explicitly set
+if config('SECURE_SSL_REDIRECT', default=False, cast=bool):
+    SECURE_SSL_REDIRECT = True
+    SECURE_REDIRECT_EXEMPT = []
+
+# Additional security settings for HTTPS (only in production)
+if not DEBUG and FRONTEND_URL.startswith('https://'):
+    # CSRF settings for HTTPS
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = True
+    CSRF_TRUSTED_ORIGINS = [FRONTEND_URL]
+    
+    # Session cookie settings
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    
+    # Additional security headers
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'

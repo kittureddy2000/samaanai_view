@@ -64,7 +64,7 @@ python manage.py createsuperuser --noinput || echo "Superuser already exists or 
 
 # Apply migrations (common for both environments)
 echo "Applying database migrations..."
-python manage.py makemigrations users nutrition
+python manage.py makemigrations users nutrition finance
 python manage.py migrate
 
 # Environment-specific execution

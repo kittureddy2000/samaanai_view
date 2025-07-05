@@ -1,40 +1,67 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Spinner } from 'common/components/UI';
+import { Spinner } from '../../common/components/UI';
 import styled from 'styled-components';
 
 const SocialLoginCallback = () => {
-  const { setAuthTokens } = useAuth();
+  const { setTokens } = useAuth();
   const navigate = useNavigate();
+  const hasProcessed = useRef(false);
+  const timeoutRef = useRef(null);
 
   useEffect(() => {
-    // Debug information
-    console.log('SocialLoginCallback: Current URL =', window.location.href);
-    console.log('SocialLoginCallback: Search params =', window.location.search);
+    // Prevent duplicate processing
+    if (hasProcessed.current) {
+      return;
+    }
+
+    // Set a timeout to prevent infinite loading
+    timeoutRef.current = setTimeout(() => {
+      if (!hasProcessed.current) {
+        console.error('SocialLoginCallback: Timeout - redirecting to login');
+        navigate('/login?error=callback_timeout', { replace: true });
+      }
+    }, 10000); // 10 second timeout
     
     const params = new URLSearchParams(window.location.search);
-    console.log('SocialLoginCallback: All params =', 
-      Array.from(params.entries()).reduce((acc, [key, val]) => {
-        acc[key] = val;
-        return acc;
-      }, {}));
-      
     const access = params.get('access_token');
     const refresh = params.get('refresh_token');
+    const nextPath = params.get('next') || sessionStorage.getItem('postLoginRedirect') || '/';
     
-    console.log('SocialLoginCallback: access token =', access ? 'present' : 'missing');
-    console.log('SocialLoginCallback: refresh token =', refresh ? 'present' : 'missing');
-
     if (access && refresh) {
-      setAuthTokens(access, refresh);
-      navigate('/dashboard', { replace: true });
+      hasProcessed.current = true;
+      
+      try {
+        setTokens(access, refresh);
+        
+        // Clear any stored redirect path
+        sessionStorage.removeItem('postLoginRedirect');
+        
+        // Navigate to the intended page
+        navigate(nextPath, { replace: true });
+        
+        // Clear timeout since we're processing successfully
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+      } catch (error) {
+        console.error('SocialLoginCallback: Error setting tokens:', error);
+        navigate('/login?error=token_error', { replace: true });
+      }
     } else {
-      console.error("Tokens missing in callback URL");
-      navigate('/login?error=token_missing', { replace: true });
+      console.error("SocialLoginCallback: Tokens missing in callback URL");
+      navigate('/login?error=missing_tokens', { replace: true });
     }
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigate, setAuthTokens]);
+  }, [navigate, setTokens]);
 
   return (
     <CallbackContainer>
@@ -52,6 +79,7 @@ const CallbackContainer = styled.div`
   align-items: center;
   justify-content: center;
   height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 `;
 
 const SpinnerWrapper = styled.div`
@@ -60,7 +88,9 @@ const SpinnerWrapper = styled.div`
 
 const Text = styled.p`
   font-size: 1.2rem;
-  color: ${({ theme }) => theme.colors.dark};
+  color: white;
+  text-align: center;
+  margin: 0;
 `;
 
 export default SocialLoginCallback; 

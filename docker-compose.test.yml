@@ -54,11 +54,19 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - frontend-test-results:/app/coverage
+      - frontend-test-results:/app/test-reports
+      - frontend-test-results:/tmp/frontend-test-results
     environment:
       - CI=true
       - REACT_APP_API_URL=http://backend-test:8000/api
-    command: npm test -- --coverage
+      - NODE_ENV=test
+      - GENERATE_SOURCEMAP=false
+      - SKIP_PREFLIGHT_CHECK=true
+    working_dir: /app
+    # Use default Node image entrypoint
+    command: ["npm", "test", "--", "--coverage", "--watchAll=false"]
 
+  # Enhanced Cypress service with better artifact handling
   cypress:
     image: cypress/included:12.17.4
     networks:
@@ -70,10 +78,18 @@ services:
       - ./frontend:/app
       - cypress-results:/cypress/videos
       - cypress-screenshots:/cypress/screenshots
+      - cypress-results:/tmp/cypress-results
     environment:
       - CYPRESS_baseUrl=http://frontend-dev:3000
+      - CYPRESS_VIDEO=true
+      - CYPRESS_SCREENSHOT_ON_RUN_FAILURE=true
     working_dir: /app
-    command: cypress run
+    command: |
+      sh -c "
+        echo 'Starting Cypress E2E tests...' &&
+        cypress run --config video=true,screenshotOnRunFailure=true &&
+        echo 'Cypress tests completed'
+      "
 
   # For E2E testing we need a running frontend
   frontend-dev:
@@ -90,6 +106,39 @@ services:
       - NODE_ENV=development
     depends_on:
       - backend-test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Test report generator service
+  test-reporter:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    networks:
+      - test-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - frontend-test-results:/app/test-reports
+      - frontend-test-results:/tmp/frontend-test-results
+    environment:
+      - CI=true
+      - NODE_ENV=test
+    working_dir: /app
+    entrypoint: |
+      sh -c "
+        chmod +x run_all_tests.js &&
+        npm install &&
+        echo 'Generating comprehensive test reports...' &&
+        node run_all_tests.js &&
+        echo 'Test reports generated successfully'
+      "
+    command: ["echo", "Test reporter ready"]
 
 networks:
   test-network:

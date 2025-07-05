@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import UserProfile
+from .models import UserProfile, WebAuthnCredential
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
 import logging
@@ -12,7 +12,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user profile data"""
     class Meta:
         model = UserProfile
-        fields = ['height', 'weight', 'date_of_birth', 'metabolic_rate', 'weight_loss_goal', 'start_of_week']
+        fields = ['height', 'weight', 'date_of_birth', 'metabolic_rate', 'weight_loss_goal', 'start_of_week', 'timezone']
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user data including profile"""
@@ -88,13 +88,44 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating user profile metrics only"""
     class Meta:
         model = UserProfile
-        fields = ['height', 'weight', 'date_of_birth', 'metabolic_rate', 'weight_loss_goal', 'start_of_week']
+        fields = ['height', 'weight', 'date_of_birth', 'metabolic_rate', 'weight_loss_goal', 'start_of_week', 'timezone']
+        
+    def validate(self, data):
+        """Custom validation with logging"""
+        logger.info(f"ProfileUpdateSerializer validating data: {data}")
+        
+        # Validate height
+        if 'height' in data and data['height'] is not None:
+            if not isinstance(data['height'], (int, float)) or data['height'] <= 0:
+                raise serializers.ValidationError({"height": "Height must be a positive number"})
+        
+        # Validate weight  
+        if 'weight' in data and data['weight'] is not None:
+            if not isinstance(data['weight'], (int, float)) or data['weight'] <= 0:
+                raise serializers.ValidationError({"weight": "Weight must be a positive number"})
+                
+        # Validate metabolic_rate
+        if 'metabolic_rate' in data and data['metabolic_rate'] is not None:
+            if not isinstance(data['metabolic_rate'], int) or data['metabolic_rate'] <= 0:
+                raise serializers.ValidationError({"metabolic_rate": "Metabolic rate must be a positive integer"})
+        
+        logger.info(f"ProfileUpdateSerializer validation passed for data: {data}")
+        return data
         
     def update(self, instance, validated_data):
         logger.info(f"Updating profile metrics for user: {instance.user.username}")
+        logger.info(f"Validated data: {validated_data}")
+        
         for attr, value in validated_data.items():
-            logger.debug(f"Setting profile metric: {attr} = {value}")
+            logger.debug(f"Setting profile metric: {attr} = {value} (type: {type(value)})")
             setattr(instance, attr, value)
         instance.save()
         logger.info(f"Profile metrics updated successfully for user: {instance.user.username}")
         return instance
+
+class WebAuthnCredentialSerializer(serializers.ModelSerializer):
+    """Serializer for WebAuthn credentials"""
+    class Meta:
+        model = WebAuthnCredential
+        fields = ['id', 'name', 'created_at', 'last_used']
+        read_only_fields = ['id', 'created_at', 'last_used']

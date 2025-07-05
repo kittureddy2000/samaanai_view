@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components';
 import Profile from '../Profile';
 import { theme } from 'common/styles/GlobalStyles';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../../common/auth';
 
 // Mock the auth context
 jest.mock('../../contexts/AuthContext');

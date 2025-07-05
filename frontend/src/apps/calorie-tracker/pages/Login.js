@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
-import { FaGoogle } from 'react-icons/fa';
+import { FaGoogle, FaFingerprint } from 'react-icons/fa';
 
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../../common/auth';
+import api from '../services/api';
 import {
   Card,
   Button,
@@ -21,14 +22,41 @@ import {
 const Login = () => {
   const { login, currentUser, error, setError, setAuthTokens } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   
   useEffect(() => {
     // If user is already logged in, redirect to dashboard
     if (currentUser) {
       navigate('/');
     }
-  }, [currentUser, navigate]);
+    
+    // Check if WebAuthn is supported
+    if (window.PublicKeyCredential && window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+      window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(available => {
+        setPasskeySupported(available);
+      });
+    }
+    
+    // Handle OAuth error messages from URL params
+    const urlParams = new URLSearchParams(location.search);
+    const errorParam = urlParams.get('error');
+    if (errorParam) {
+      const errorMessages = {
+        'social_auth_failed': 'Social authentication failed. Please try again.',
+        'token_missing': 'Authentication tokens were not received. Please try again.',
+        'token_processing_failed': 'Failed to process authentication tokens. Please try again.',
+        'callback_timeout': 'Authentication timed out. Please try again.',
+      };
+      setError(errorMessages[errorParam] || 'Authentication failed. Please try again.');
+    }
+  }, [currentUser, navigate, location.search, setError]);
+  
+  // Get intended redirect path from query or sessionStorage
+  const searchParams = new URLSearchParams(location.search);
+  const nextPath = searchParams.get('next') || sessionStorage.getItem('postLoginRedirect') || '/';
   
   const handleLogin = async (values, { setSubmitting }) => {
     try {
@@ -37,7 +65,7 @@ const Login = () => {
       const tokens = await login(values.username, values.password);
       if (tokens && tokens.access && tokens.refresh) {
         setAuthTokens(tokens.access, tokens.refresh);
-        navigate('/');
+        navigate(nextPath);
       } else {
         throw new Error("Login successful but tokens not received.");
       }
@@ -50,20 +78,100 @@ const Login = () => {
   };
   
   const handleGoogleLogin = () => {
-    console.log('Google login button clicked');
+    // Store the next path for post-login redirect
+    sessionStorage.setItem('postLoginRedirect', nextPath);
     
-    // IMPORTANT: Backend expects URLs with format: http://domain/api/auth/social/login/google-oauth2/
-    // Extract the base domain (without /api) from REACT_APP_API_URL
-    let baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-    if (baseUrl.endsWith('/api')) {
-      baseUrl = baseUrl.slice(0, -4); // Remove /api suffix
-    }
+    // Get base URL (remove /api if present)
+    const baseUrl = process.env.REACT_APP_API_URL ? 
+      process.env.REACT_APP_API_URL.replace(/\/api$/, '') : 
+      'http://localhost:8000';
     
-    // Now build the full URL with the correct path structure
-    const socialAuthUrl = `${baseUrl}/api/auth/social/login/google-oauth2/`;
+    // Construct the social auth URL - this triggers the OAuth flow
+    const socialAuthUrl = `${baseUrl}/api/auth/social/login/google-oauth2/?next=${encodeURIComponent(nextPath)}`;
     
-    console.log('Redirecting to:', socialAuthUrl);
+    // Redirect to Google OAuth
     window.location.href = socialAuthUrl;
+  };
+
+  const handlePasskeyLogin = async (formikValues) => {
+    if (!passkeySupported) {
+      setError('Passkeys are not supported on this device');
+      return;
+    }
+
+    try {
+      setPasskeyLoading(true);
+      setError('');
+
+      // Get username from form values or DOM
+      let username = formikValues?.username;
+      if (!username) {
+        const usernameField = document.getElementById('username');
+        username = usernameField?.value;
+      }
+      
+      if (!username?.trim()) {
+        setError('Please enter your username first');
+        return;
+      }
+
+      // Begin authentication
+      const beginResponse = await api.post('api/users/webauthn/authenticate/begin/', { 
+        username: username.trim() 
+      });
+      const options = beginResponse.data;
+
+      // Convert base64 strings to ArrayBuffers
+      const credentialRequestOptions = {
+        challenge: Uint8Array.from(atob(options.challenge), c => c.charCodeAt(0)),
+        timeout: options.timeout,
+        rpId: options.rpId,
+        allowCredentials: options.allowCredentials.map(cred => ({
+          id: Uint8Array.from(atob(cred.id), c => c.charCodeAt(0)),
+          type: cred.type
+        })),
+        userVerification: options.userVerification
+      };
+
+      // Get the credential from the authenticator
+      const credential = await navigator.credentials.get({
+        publicKey: credentialRequestOptions
+      });
+
+      if (!credential) {
+        throw new Error('No credential received');
+      }
+
+      // Convert ArrayBuffers to base64 for sending to server
+      const credentialData = {
+        id: credential.id,
+        rawId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+        response: {
+          authenticatorData: btoa(String.fromCharCode(...new Uint8Array(credential.response.authenticatorData))),
+          clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(credential.response.clientDataJSON))),
+          signature: btoa(String.fromCharCode(...new Uint8Array(credential.response.signature))),
+          userHandle: credential.response.userHandle ? btoa(String.fromCharCode(...new Uint8Array(credential.response.userHandle))) : null
+        },
+        type: credential.type
+      };
+
+      // Complete authentication
+      const completeResponse = await api.post('api/users/webauthn/authenticate/complete/', credentialData);
+      const result = completeResponse.data;
+
+      if (result.verified && result.access && result.refresh) {
+        setAuthTokens(result.access, result.refresh);
+        navigate(nextPath);
+      } else {
+        throw new Error('Authentication failed');
+      }
+
+    } catch (err) {
+      console.error('Passkey login error:', err);
+      setError(err.message || 'Passkey authentication failed');
+    } finally {
+      setPasskeyLoading(false);
+    }
   };
   
   // Validation schema
@@ -97,7 +205,7 @@ const Login = () => {
           validationSchema={loginValidationSchema}
           onSubmit={handleLogin}
         >
-          {({ isSubmitting }) => (
+          {({ isSubmitting, values }) => (
             <Form>
               <FormGroup>
                 <Label htmlFor="username">Username</Label>
@@ -129,7 +237,7 @@ const Login = () => {
               
               <LoginButton 
                 type="submit" 
-                fullwidth 
+                $fullwidth
                 disabled={isSubmitting || loading}
               >
                 {loading ? (
@@ -149,11 +257,32 @@ const Login = () => {
               <GoogleButton 
                 type="button"
                 onClick={handleGoogleLogin}
-                fullwidth
+                $fullwidth
               >
                 <FaGoogle style={{ marginRight: '8px' }} />
                 Sign in with Google
               </GoogleButton>
+              
+              {passkeySupported && (
+                <PasskeyButton 
+                  type="button"
+                  onClick={() => handlePasskeyLogin(values)}
+                  disabled={passkeyLoading}
+                  $fullwidth
+                >
+                  {passkeyLoading ? (
+                    <>
+                      <Spinner size="16px" />
+                      <span>Authenticating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaFingerprint style={{ marginRight: '8px' }} />
+                      Sign in with Passkey
+                    </>
+                  )}
+                </PasskeyButton>
+              )}
             </Form>
           )}
         </Formik>
@@ -163,33 +292,6 @@ const Login = () => {
           <RegisterLink to="/register">Sign up</RegisterLink>
         </RegisterPrompt>
       </LoginCard>
-      
-      {/* <AppFeatures>
-        <FeatureCard>
-          <FeatureIcon className="material-symbols-outlined">restaurant</FeatureIcon>
-          <FeatureTitle>Track Your Nutrition</FeatureTitle>
-          <FeatureText>
-            Easily log meals and exercises with our simple interface
-          </FeatureText>
-        </FeatureCard>
-        
-        <FeatureCard>
-          <FeatureIcon className="material-symbols-outlined">insights</FeatureIcon>
-          <FeatureTitle>Insightful Reports</FeatureTitle>
-          <FeatureText>
-            Get weekly, monthly, and yearly nutrition breakdowns
-          </FeatureText>
-        </FeatureCard>
-        
-        <FeatureCard>
-          <FeatureIcon className="material-symbols-outlined">trending_down</FeatureIcon>
-          <FeatureTitle>Reach Your Goals</FeatureTitle>
-          <FeatureText>
-            Set targets and track your progress over time
-          </FeatureText>
-        </FeatureCard>
-      </AppFeatures> */}
-
     </LoginContainer>
   );
 };
@@ -278,50 +380,6 @@ const RegisterLink = styled(Link)`
   color: ${({ theme }) => theme.colors.primary};
 `;
 
-const AppFeatures = styled.div`
-  display: flex;
-  gap: 1.5rem;
-  margin-top: 1rem;
-  
-  @media (max-width: ${({ theme }) => theme.breakpoints.md}) {
-    flex-direction: column;
-    gap: 1rem;
-  }
-`;
-
-const FeatureCard = styled.div`
-  background-color: ${({ theme }) => theme.colors.white};
-  border-radius: ${({ theme }) => theme.borderRadius.medium};
-  box-shadow: ${({ theme }) => theme.shadows.small};
-  padding: 1.5rem;
-  width: 220px;
-  text-align: center;
-  
-  @media (max-width: ${({ theme }) => theme.breakpoints.md}) {
-    width: 100%;
-    max-width: 400px;
-  }
-`;
-
-const FeatureIcon = styled.span`
-  font-size: 2.5rem;
-  color: ${({ theme }) => theme.colors.primary};
-  margin-bottom: 0.5rem;
-  display: block;
-`;
-
-const FeatureTitle = styled.h3`
-  font-size: 1.1rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-`;
-
-const FeatureText = styled.p`
-  font-size: 0.9rem;
-  color: ${({ theme }) => theme.colors.neutral};
-  margin: 0;
-`;
-
 const OrSeparator = styled.div`
   display: flex;
   align-items: center;
@@ -348,6 +406,23 @@ const GoogleButton = styled(Button)`
   &:hover {
     background-color: #f8f9fa;
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+`;
+
+const PasskeyButton = styled(Button)`
+  background-color: #1a73e8;
+  color: white;
+  border: 1px solid #1a73e8;
+  margin-top: 0.75rem;
+  
+  &:hover {
+    background-color: #1565c0;
+    border-color: #1565c0;
+  }
+  
+  &:disabled {
+    background-color: #94a3b8;
+    border-color: #94a3b8;
   }
 `;
 

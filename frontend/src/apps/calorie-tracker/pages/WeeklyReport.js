@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { format, addWeeks, subWeeks, getDay, subDays, addDays } from 'date-fns';
+import { format, getDay, subDays, addDays, parseISO } from 'date-fns';
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -13,7 +14,7 @@ import {
 import { Bar } from 'react-chartjs-2';
 
 import nutritionService from '../services/nutritionService';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../../common/auth';
 import { 
   Card, 
   Button, 
@@ -34,47 +35,37 @@ ChartJS.register(
   Legend
 );
 
+// Helper function to parse date strings as local dates (not UTC)
+const parseLocalDate = (dateString) => {
+  // Parse YYYY-MM-DD as local date, not UTC
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day); // month is 0-indexed in Date constructor
+};
+
+// Move getStartOfCurrentWeek outside the WeeklyReport component
+const getStartOfCurrentWeek = (currentUser) => {
+  const today = new Date();
+  const jsDayOfWeek = getDay(today);
+  const pythonWeekday = jsDayOfWeek === 0 ? 6 : jsDayOfWeek - 1;
+  let preferredStartDay = 2;
+  if (currentUser && currentUser.profile && currentUser.profile.start_of_week !== undefined) {
+    preferredStartDay = parseInt(currentUser.profile.start_of_week, 10);
+  }
+  const daysToSubtract = (pythonWeekday - preferredStartDay + 7) % 7;
+  return subDays(today, daysToSubtract);
+};
+
 const WeeklyReport = () => {
   const { currentUser } = useAuth();
   
-  // Initialize the selectedDate to start on the user's preferred day
-  const getStartOfCurrentWeek = () => {
-    const today = new Date();
-    // JavaScript getDay(): 0=Sunday, 1=Monday, ..., 6=Saturday
-    const jsDayOfWeek = getDay(today);
-    
-    // Convert JavaScript day to Python weekday (0=Monday, ..., 6=Sunday)
-    // Python: 0=Monday, 1=Tuesday, ..., 6=Sunday
-    // JS: 0=Sunday, 1=Monday, ..., 6=Saturday
-    const pythonWeekday = jsDayOfWeek === 0 ? 6 : jsDayOfWeek - 1;
-    
-    // Get the user's preferred start of week (default to Wednesday if not set)
-    let preferredStartDay = 2; // Default to Wednesday (2 in Python's scheme)
-    if (currentUser && currentUser.profile && currentUser.profile.start_of_week !== undefined) {
-      preferredStartDay = parseInt(currentUser.profile.start_of_week, 10);
-    }
-    
-    // Days to subtract to reach the preferred start day for this week
-    // This calculation aligns with the backend logic
-    const daysToSubtract = (pythonWeekday - preferredStartDay + 7) % 7;
-    
-    console.log(`Today: ${format(today, 'yyyy-MM-dd')}, JS day: ${jsDayOfWeek}, Python day: ${pythonWeekday}`);
-    console.log(`Preferred start day: ${preferredStartDay}, Days to subtract: ${daysToSubtract}`);
-    
-    const result = subDays(today, daysToSubtract);
-    console.log(`Calculated start of week: ${format(result, 'yyyy-MM-dd')} (${format(result, 'EEEE')})`);
-    
-    return result;
-  };
-  
-  const [selectedDate, setSelectedDate] = useState(getStartOfCurrentWeek());
+  const [selectedDate, setSelectedDate] = useState(() => getStartOfCurrentWeek(currentUser));
   const [weeklyData, setWeeklyData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
   // Re-calculate start of week when user changes or when their profile is loaded
   useEffect(() => {
-    setSelectedDate(getStartOfCurrentWeek());
+    setSelectedDate(getStartOfCurrentWeek(currentUser));
   }, [currentUser]);
   
   const fetchWeeklyData = useCallback(async () => {
@@ -82,14 +73,6 @@ const WeeklyReport = () => {
       setLoading(true);
       setError('');
       const data = await nutritionService.getWeeklyReport(selectedDate);
-      
-      // Debug what dates we're actually getting from the API
-      console.log('API returned dates:', {
-        start_date: data.start_date,
-        end_date: data.end_date,
-        parsed_start: new Date(data.start_date),
-        parsed_end: new Date(data.end_date)
-      });
       
       setWeeklyData(data);
     } catch (err) {
@@ -119,10 +102,10 @@ const WeeklyReport = () => {
     if (!weeklyData || !weeklyData.daily_summaries) return null;
     
     const sortedEntries = [...weeklyData.daily_summaries].sort((a, b) => 
-      new Date(a.date) - new Date(b.date)
+      parseLocalDate(a.date) - parseLocalDate(b.date)
     );
     
-    const labels = sortedEntries.map(entry => format(new Date(entry.date), 'EEE, MMM d'));
+    const labels = sortedEntries.map(entry => format(parseLocalDate(entry.date), 'EEE, MMM d'));
     
     const foodData = sortedEntries.map(entry => entry.total_food_calories || 0);
     const exerciseData = sortedEntries.map(entry => entry.total_exercise_calories || 0);
@@ -152,8 +135,8 @@ const WeeklyReport = () => {
         {
           label: 'Net',
           data: netCaloriesData,
-          backgroundColor: 'rgba(54, 162, 235, 0.5)',
-          borderColor: 'rgba(54, 162, 235, 1)',
+          backgroundColor: 'rgba(33, 150, 243, 0.5)',
+          borderColor: 'rgba(33, 150, 243, 1)',
           borderWidth: 1,
         }
       ]
@@ -209,6 +192,18 @@ const WeeklyReport = () => {
     },
   };
   
+  // Calculate which day should show as the start of the week
+  const getPythonWeekday = (jsDate) => {
+    // JavaScript: Sunday = 0, Monday = 1, ..., Saturday = 6
+    // Python: Monday = 0, Tuesday = 1, ..., Sunday = 6
+    const jsDay = jsDate.getDay();
+    return jsDay === 0 ? 6 : jsDay - 1; // Convert Sunday (0) to 6, others subtract 1
+  };
+
+  // Get start day index for this week
+  const startDayIndex = currentUser?.profile?.start_of_week || 2; // Default Wednesday
+  const pythonDay = getPythonWeekday(selectedDate);
+  
   return (
     <div>
       <StickyHeader>
@@ -227,9 +222,9 @@ const WeeklyReport = () => {
             <WeekDisplay>
               {weeklyData && weeklyData.start_date && weeklyData.end_date ? (
                 <>
-                  <span>{format(new Date(weeklyData.start_date), 'MMM d')}</span>
+                  <span>{format(parseLocalDate(weeklyData.start_date), 'MMM d')}</span>
                   <span> - </span>
-                  <span>{format(new Date(weeklyData.end_date), 'MMM d, yyyy')}</span>
+                  <span>{format(parseLocalDate(weeklyData.end_date), 'MMM d, yyyy')}</span>
                   <WeekDisplayStartDay>
                     ({(() => {
                       // Get user's start day name
@@ -241,11 +236,9 @@ const WeeklyReport = () => {
                       }
                       
                       // Verify the start date weekday
-                      const startDate = new Date(weeklyData.start_date);
+                      const startDate = parseLocalDate(weeklyData.start_date);
                       const jsDay = getDay(startDate); // 0=Sunday, 1=Monday, ..., 6=Saturday
                       const pythonDay = jsDay === 0 ? 6 : jsDay - 1; // Convert JS day to Python day
-                      
-                      console.log(`Start date: ${format(startDate, 'EEEE')}, Python weekday should be: ${startDayIndex}, Actual: ${pythonDay}`);
                       
                       // Use the actual day from the API response for the display
                       return `${dayNames[startDayIndex]} start`;
@@ -329,6 +322,15 @@ const WeeklyReport = () => {
                         return total;
                       })() || 0} cal
                     </SummaryBoxValue>
+                    {!currentUser?.profile?.metabolic_rate && (
+                      <SetupLink>
+                        <StyledLink to="/nutrition/profile">
+                          <Text size="0.75rem" color="primary" noMargin>
+                            Set up metabolic rate →
+                          </Text>
+                        </StyledLink>
+                      </SetupLink>
+                    )}
                   </SummaryBoxContent>
                 </SummaryBox>
               </Grid>
@@ -421,6 +423,14 @@ const SummaryBox = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.medium};
   background-color: ${({ theme }) => theme.colors.white};
   box-shadow: ${({ theme }) => theme.shadows.small};
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding: 1.25rem;
+    flex-direction: column;
+    text-align: center;
+    min-height: 140px;
+    justify-content: center;
+  }
 `;
 
 const SummaryBoxIcon = styled.div`
@@ -432,10 +442,22 @@ const SummaryBoxIcon = styled.div`
   border-radius: 50%;
   background-color: ${({ theme, color }) => theme.colors[color] + '15'};
   margin-right: 1rem;
+  flex-shrink: 0;
   
   span {
     color: ${({ theme, color }) => theme.colors[color]};
     font-size: 24px;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    width: 56px;
+    height: 56px;
+    margin-right: 0;
+    margin-bottom: 0.75rem;
+    
+    span {
+      font-size: 28px;
+    }
   }
 `;
 
@@ -451,6 +473,11 @@ const SummaryBoxValue = styled.div`
   font-size: 1.25rem;
   font-weight: 600;
   color: ${({ theme, color }) => color ? theme.colors[color] : theme.colors.dark};
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    font-size: 1.5rem;
+    margin-top: 0.25rem;
+  }
 `;
 
 const ChartCard = styled(Card)`
@@ -462,7 +489,28 @@ const ChartTitleWrapper = styled.div`
 `;
 
 const ChartWrapper = styled.div`
-  height: 400px; 
+  height: 400px;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    height: 300px;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    height: 250px;
+  }
+`;
+
+const SetupLink = styled.div`
+  margin-top: 0.5rem;
+  text-align: center;
+`;
+
+const StyledLink = styled(Link)`
+  text-decoration: none;
+  
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 export default WeeklyReport;

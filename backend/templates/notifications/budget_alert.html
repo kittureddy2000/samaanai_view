@@ -1,0 +1,54 @@
+{% extends "notifications/base_email.html" %}
+
+{% block title %}Budget Alert - {{ category_name }}{% endblock %}
+
+{% block content %}
+<h1>🚨 Budget Alert</h1>
+
+<p>Hi {{ user.get_full_name|default:user.username }},</p>
+
+<p>We wanted to let you know that your spending in the <strong>{{ category_name }}</strong> category has reached <strong>{{ percentage|floatformat:1 }}%</strong> of your monthly budget.</p>
+
+{% if over_budget %}
+<div class="alert-high">
+    <h3>⚠️ Budget Exceeded</h3>
+    <p>You have exceeded your budget for {{ category_name }}!</p>
+    <div class="amount negative">${{ spent_amount|floatformat:2 }} spent</div>
+    <div>Budget: ${{ budget_amount|floatformat:2 }}</div>
+    <div>Over budget by: ${{ remaining_amount|floatformat:2 }}</div>
+</div>
+{% elif percentage >= 90 %}
+<div class="alert-warning">
+    <h3>⚠️ Budget Warning</h3>
+    <p>You're approaching your budget limit for {{ category_name }}.</p>
+    <div class="amount">${{ spent_amount|floatformat:2 }} spent</div>
+    <div>Budget: ${{ budget_amount|floatformat:2 }}</div>
+    <div>Remaining: ${{ remaining_amount|floatformat:2 }}</div>
+</div>
+{% else %}
+<div class="alert-info">
+    <h3>📊 Budget Update</h3>
+    <p>Here's your current spending for {{ category_name }}:</p>
+    <div class="amount">${{ spent_amount|floatformat:2 }} spent</div>
+    <div>Budget: ${{ budget_amount|floatformat:2 }}</div>
+    <div>Remaining: ${{ remaining_amount|floatformat:2 }}</div>
+</div>
+{% endif %}
+
+<h3>What you can do:</h3>
+<ul>
+    {% if over_budget %}
+    <li>Review your recent transactions in this category</li>
+    <li>Consider adjusting your budget for next month</li>
+    <li>Look for ways to reduce spending in this area</li>
+    {% else %}
+    <li>Review your spending patterns</li>
+    <li>Plan your remaining budget carefully</li>
+    <li>Consider if you need to adjust your spending habits</li>
+    {% endif %}
+</ul>
+
+<a href="{{ frontend_url|default:'#' }}/dashboard" class="button">View Dashboard</a>
+
+<p>Stay on track with your financial goals!</p>
+{% endblock %} 

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { format } from 'date-fns';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -14,17 +16,18 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 
 import nutritionService from '../services/nutritionService';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../../common/auth';
 import {
   Card,
   Button,
   Title,
   Text,
   Spinner,
-  Grid
+  Grid,
+  FormGroup
 } from 'common/components/UI';
 
 // Register ChartJS components
@@ -40,6 +43,13 @@ ChartJS.register(
   Filler
 );
 
+// Helper function to parse date strings as local dates (not UTC)
+const parseLocalDate = (dateString) => {
+  // Parse YYYY-MM-DD as local date, not UTC
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day); // month is 0-indexed in Date constructor
+};
+
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -48,8 +58,15 @@ const Dashboard = () => {
   const [weeklyData, setWeeklyData] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   
+  // Weight tracking state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [weight, setWeight] = useState('');
+  const [weightHistory, setWeightHistory] = useState([]);
+  const [isSubmittingWeight, setIsSubmittingWeight] = useState(false);
+  
   useEffect(() => {
     fetchDashboardData();
+    fetchWeightHistory();
   }, []);
   
   const fetchDashboardData = async () => {
@@ -96,6 +113,35 @@ const Dashboard = () => {
     }
   };
   
+  const fetchWeightHistory = async () => {
+    try {
+      const resp = await nutritionService.getWeightHistory();
+      // Handle possible paginated or object response
+      const historyArray = resp?.results || resp || [];
+      setWeightHistory(Array.isArray(historyArray) ? historyArray : []);
+    } catch (err) {
+      console.error('Error fetching weight history:', err);
+      // Don't set error here as it's not critical for dashboard
+    }
+  };
+  
+  const handleWeightSubmit = async () => {
+    try {
+      setIsSubmittingWeight(true);
+      await nutritionService.addOrUpdateWeightEntry({
+        weight: parseFloat(weight),
+        date: format(selectedDate, 'yyyy-MM-dd')
+      });
+      setWeight('');
+      await fetchWeightHistory();
+    } catch (err) {
+      console.error('Error adding/updating weight entry:', err);
+      setError('Failed to save weight entry. Please try again.');
+    } finally {
+      setIsSubmittingWeight(false);
+    }
+  };
+  
   // Calculate net calories - now using the value from the daily report
   const getTodayNetCalories = () => {
     if (!todayData) return 'N/A';
@@ -104,24 +150,35 @@ const Dashboard = () => {
     const hasData = (todayData.total_food_calories > 0 || todayData.total_exercise_calories > 0);
     if (!hasData) return 0;
     
-    // net_calories is now directly available from the API response
-    return todayData.net_calories !== null ? Math.round(todayData.net_calories) : 'N/A';
+    // Use default metabolic rate of 2000 if not set
+    const metabolic_rate = currentUser?.profile?.metabolic_rate || 2000;
+    const weight_loss_goal = currentUser?.profile?.weight_loss_goal || 0;
+    const weightLossCaloriesPerDay = (weight_loss_goal * 3500) / 7;
+    
+    return Math.round(
+      metabolic_rate - 
+      weightLossCaloriesPerDay - 
+      todayData.total_food_calories + 
+      todayData.total_exercise_calories
+    );
   };
   
   // Calculate caloric budget
   const calculateCaloricBudget = () => {
-    if (!currentUser.profile || !currentUser.profile.metabolic_rate) return null;
+    // Use default metabolic rate of 2000 if not set
+    const metabolic_rate = currentUser?.profile?.metabolic_rate || 2000;
+    const weight_loss_goal = currentUser?.profile?.weight_loss_goal || 0;
     
     // Weight loss goal in calories per day (convert from lbs/week)
-    const weightLossCalories = (currentUser.profile.weight_loss_goal * 3500) / 7;
+    const weightLossCalories = (weight_loss_goal * 3500) / 7;
     
     // Daily caloric budget
-    return Math.round(currentUser.profile.metabolic_rate - weightLossCalories);
+    return Math.round(metabolic_rate - weightLossCalories);
   };
   
   // Calculate daily goal progress
   const calculateGoalProgress = () => {
-    if (!todayData || !currentUser.profile || !currentUser.profile.metabolic_rate) return 0;
+    if (!todayData) return 0;
     
     const budget = calculateCaloricBudget();
     if (!budget) return 0;
@@ -145,11 +202,11 @@ const Dashboard = () => {
     
     // Sort the entries by date
     const sortedEntries = [...weeklyData.daily_summaries].sort((a, b) => 
-      new Date(a.date) - new Date(b.date)
+      parseLocalDate(a.date) - parseLocalDate(b.date)
     );
     
     // Format dates for labels
-    const labels = sortedEntries.map(entry => format(new Date(entry.date), 'EEE'));
+    const labels = sortedEntries.map(entry => format(parseLocalDate(entry.date), 'EEE'));
     
     // Data for chart
     const netCaloriesData = sortedEntries.map(entry => {
@@ -213,6 +270,76 @@ const Dashboard = () => {
     },
   };
   
+  // Prepare weight chart data
+  const prepareWeightChartData = () => {
+    if (!weightHistory || weightHistory.length === 0) return null;
+    
+    // Sort weight history by date
+    const sortedHistory = [...weightHistory].sort((a, b) => 
+      parseLocalDate(a.date) - parseLocalDate(b.date)
+    );
+    
+    // Format dates for labels
+    const labels = sortedHistory.map(entry => format(parseLocalDate(entry.date), 'MMM d'));
+    
+    // Data for chart
+    const weightData = sortedHistory.map(entry => entry.weight);
+    
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Weight',
+          data: weightData,
+          borderColor: 'rgba(255, 99, 132, 1)',
+          backgroundColor: 'rgba(255, 99, 132, 0.1)',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+        }
+      ]
+    };
+  };
+  
+  // Weight chart options
+  const weightChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        grid: {
+          display: false
+        }
+      },
+      y: {
+        beginAtZero: false,
+        title: {
+          display: true,
+          text: 'Weight (kg)'
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.parsed.y !== null) {
+              label += context.parsed.y + ' kg';
+            }
+            return label;
+          }
+        }
+      }
+    },
+  };
+  
   return (
     <div>
       <WelcomeBar>
@@ -221,7 +348,7 @@ const Dashboard = () => {
           <Text noMargin>Let's track your nutrition today</Text>
         </div>
         
-        <StyledLink to="/daily">
+        <StyledLink to="daily">
           <Button>
             <span className="material-symbols-outlined">add_circle</span>
             Log Entry
@@ -252,7 +379,7 @@ const Dashboard = () => {
                     <Text nomargin>{format(new Date(), 'EEEE, MMMM d, yyyy')}</Text>
                   </div>
                   
-                  <StyledLink to="/daily">
+                  <StyledLink to="daily">
                     <Button variant="outline" size="small">
                       View Details
                     </Button>
@@ -272,7 +399,7 @@ const Dashboard = () => {
                   </StatBox>
                   
                   <StatBox>
-                    <StatIcon color="secondary">
+                    <StatIcon color="info">
                       <span className="material-symbols-outlined">fitness_center</span>
                     </StatIcon>
                     <StatContent>
@@ -294,13 +421,38 @@ const Dashboard = () => {
                   </StatBox>
                   
                   <StatBox>
-                    <StatIcon color="danger">
+                    <StatIcon color="secondary">
                       <span className="material-symbols-outlined">calculate</span>
                     </StatIcon>
                     <StatContent>
                       <StatLabel>Net</StatLabel>
                       <StatValue>{getTodayNetCalories()}</StatValue>
                       <StatUnit>cal</StatUnit>
+                      {!currentUser?.profile?.metabolic_rate && (
+                        <SetupLink>
+                          <StyledLink to="/nutrition/profile">
+                            <Text size="0.75rem" color="primary" noMargin>
+                              Set up metabolic rate →
+                            </Text>
+                          </StyledLink>
+                        </SetupLink>
+                      )}
+                    </StatContent>
+                  </StatBox>
+                  
+                  <StatBox>
+                    <StatIcon color="success">
+                      <span className="material-symbols-outlined">monitor_weight</span>
+                    </StatIcon>
+                    <StatContent>
+                      <StatLabel>Weight</StatLabel>
+                      <StatValue>
+                        {weightHistory.length > 0 
+                          ? weightHistory[weightHistory.length - 1]?.weight || 'N/A'
+                          : 'N/A'
+                        }
+                      </StatValue>
+                      <StatUnit>kg</StatUnit>
                     </StatContent>
                   </StatBox>
                 </StatsGrid>
@@ -363,7 +515,7 @@ const Dashboard = () => {
                   </EmptyActivity>
                 )}
                 
-                <ViewAllLink to="/daily">
+                <ViewAllLink to="daily">
                   <span>View All Activity</span>
                   <span className="material-symbols-outlined">arrow_forward</span>
                 </ViewAllLink>
@@ -380,7 +532,7 @@ const Dashboard = () => {
                   <Text noMargin>Your net calorie intake for the past week</Text>
                 </div>
                 
-                <StyledLink to="/weekly">
+                <StyledLink to="weekly">
                   <Button variant="outline" size="small">
                     View Report
                   </Button>
@@ -401,27 +553,97 @@ const Dashboard = () => {
             </WeeklyTrend>
           </Card>
           
+          {/* Weight Tracking Chart */}
+          <Card style={{ marginTop: '1.5rem' }}>
+            <WeeklyTrend>
+              <SummaryHeader>
+                <div>
+                  <Title size="1.25rem">Weight Progress</Title>
+                  <Text noMargin>Your weight tracking over time</Text>
+                </div>
+                
+                {weightHistory.length > 0 && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <Text size="0.875rem" color="neutral">
+                      Latest: {weightHistory[weightHistory.length - 1]?.weight} kg
+                    </Text>
+                    {weightHistory.length > 1 && (
+                      <Text size="0.875rem" color={
+                        weightHistory[weightHistory.length - 1]?.weight > weightHistory[weightHistory.length - 2]?.weight 
+                          ? 'danger' : 'success'
+                      }>
+                        {weightHistory[weightHistory.length - 1]?.weight > weightHistory[weightHistory.length - 2]?.weight 
+                          ? `+${(weightHistory[weightHistory.length - 1]?.weight - weightHistory[weightHistory.length - 2]?.weight).toFixed(1)}` 
+                          : `${(weightHistory[weightHistory.length - 1]?.weight - weightHistory[weightHistory.length - 2]?.weight).toFixed(1)}`
+                        } kg
+                      </Text>
+                    )}
+                  </div>
+                )}
+              </SummaryHeader>
+              
+              <ChartContainer height="300px">
+                {prepareWeightChartData() ? (
+                  <Line data={prepareWeightChartData()} options={weightChartOptions} />
+                ) : (
+                  <EmptyState>
+                    <span className="material-symbols-outlined">monitor_weight</span>
+                    <Text>No weight data available yet.</Text>
+                    <Text>Start tracking your weight to see progress over time.</Text>
+                  </EmptyState>
+                )}
+              </ChartContainer>
+            </WeeklyTrend>
+          </Card>
+          
           {/* Quick Actions */}
           <QuickActionsGrid>
-            <ActionCard to="/daily">
-              <ActionIcon className="material-symbols-outlined">add_circle</ActionIcon>
-              <ActionTitle>Log Food</ActionTitle>
-              <ActionDescription>Record your meals and snacks</ActionDescription>
+            <ActionCard to="daily">
+              <ActionIcon className="material-symbols-outlined">restaurant</ActionIcon>
+              <ActionTitle>Log Calories</ActionTitle>
+              <ActionDescription>Record meals, snacks & exercise</ActionDescription>
             </ActionCard>
             
-            <ActionCard to="/daily">
-              <ActionIcon className="material-symbols-outlined">directions_run</ActionIcon>
-              <ActionTitle>Log Exercise</ActionTitle>
-              <ActionDescription>Track your workouts and activities</ActionDescription>
-            </ActionCard>
+            {/* Weight Tracking Card */}
+            <WeightCard>
+              <ActionIcon className="material-symbols-outlined">monitor_weight</ActionIcon>
+              <ActionTitle>Track Weight</ActionTitle>
+              <WeightForm>
+                <FormGroup style={{ marginBottom: '0.5rem' }}>
+                  <DatePicker
+                    selected={selectedDate}
+                    onChange={setSelectedDate}
+                    dateFormat="MMM d, yyyy"
+                    customInput={<WeightInput placeholder="Select date" />}
+                  />
+                </FormGroup>
+                <FormGroup style={{ marginBottom: '0.75rem' }}>
+                  <WeightInput
+                    type="number"
+                    step="0.1"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    placeholder="Weight (kg)"
+                  />
+                </FormGroup>
+                <Button 
+                  size="small"
+                  onClick={handleWeightSubmit}
+                  disabled={isSubmittingWeight || !weight}
+                  style={{ width: '100%', fontSize: '0.875rem' }}
+                >
+                  {isSubmittingWeight ? 'Saving...' : 'Save Weight'}
+                </Button>
+              </WeightForm>
+            </WeightCard>
             
-            <ActionCard to="/weekly">
+            <ActionCard to="weekly">
               <ActionIcon className="material-symbols-outlined">bar_chart</ActionIcon>
               <ActionTitle>Weekly Report</ActionTitle>
               <ActionDescription>View your progress this week</ActionDescription>
             </ActionCard>
             
-            <ActionCard to="/profile">
+            <ActionCard to="profile">
               <ActionIcon className="material-symbols-outlined">settings</ActionIcon>
               <ActionTitle>Update Goals</ActionTitle>
               <ActionDescription>Adjust your nutrition targets</ActionDescription>
@@ -442,10 +664,11 @@ const WelcomeBar = styled.div`
   
   @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 1rem;
     
     > div:first-child {
-      margin-bottom: 1rem;
+      text-align: center;
     }
   }
 `;
@@ -478,9 +701,11 @@ const SummaryHeader = styled.div`
   
   @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
     flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
     
-    button {
-      margin-top: 1rem;
+    > div:first-child {
+      text-align: center;
     }
   }
 `;
@@ -491,12 +716,28 @@ const TodaySummary = styled.div`
 
 const StatsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1rem;
   margin-bottom: 1.5rem;
   
+  @media (max-width: ${({ theme }) => theme.breakpoints.lg}) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+  
   @media (max-width: ${({ theme }) => theme.breakpoints.md}) {
     grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
 `;
 
@@ -507,6 +748,14 @@ const StatBox = styled.div`
   background-color: ${({ theme }) => theme.colors.white};
   border-radius: ${({ theme }) => theme.borderRadius.medium};
   box-shadow: ${({ theme }) => theme.shadows.small};
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding: 0.875rem;
+    flex-direction: column;
+    text-align: center;
+    min-height: 120px;
+    justify-content: center;
+  }
 `;
 
 const StatIcon = styled.div`
@@ -518,10 +767,22 @@ const StatIcon = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.circle};
   background-color: ${({ theme, color }) => theme.colors[color] + '15'};
   margin-right: 1rem;
+  flex-shrink: 0;
   
   span {
     color: ${({ theme, color }) => theme.colors[color]};
     font-size: 20px;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+    width: 48px;
+    height: 48px;
+    
+    span {
+      font-size: 24px;
+    }
   }
 `;
 
@@ -539,6 +800,10 @@ const StatValue = styled.span`
   font-size: 1.25rem;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.dark};
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    font-size: 1.5rem;
+  }
 `;
 
 const StatUnit = styled.span`
@@ -607,6 +872,11 @@ const ActivityItem = styled.div`
   &:last-child {
     border-bottom: none;
   }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding: 1rem 0;
+    align-items: flex-start;
+  }
 `;
 
 const ActivityIcon = styled.div`
@@ -619,11 +889,23 @@ const ActivityIcon = styled.div`
   background-color: ${({ theme, type }) => 
     type === 'meal' ? theme.colors.danger + '15' : theme.colors.primary + '15'};
   margin-right: 0.75rem;
+  flex-shrink: 0;
   
   span {
     color: ${({ theme, type }) => 
       type === 'meal' ? theme.colors.danger : theme.colors.primary};
     font-size: 18px;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    width: 40px;
+    height: 40px;
+    margin-right: 1rem;
+    margin-top: 0.25rem;
+    
+    span {
+      font-size: 20px;
+    }
   }
 `;
 
@@ -638,6 +920,13 @@ const ActivityTitle = styled.div`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: initial;
+    line-height: 1.4;
+  }
 `;
 
 const ActivityMeta = styled.div`
@@ -659,6 +948,13 @@ const ActivityTime = styled.div`
   font-size: 0.75rem;
   color: ${({ theme }) => theme.colors.neutral};
   margin-left: 0.75rem;
+  flex-shrink: 0;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    margin-left: 0;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+  }
 `;
 
 const EmptyState = styled.div`
@@ -733,6 +1029,7 @@ const QuickActionsGrid = styled.div`
   
   @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
 `;
 
@@ -746,10 +1043,25 @@ const ActionCard = styled(Link)`
   box-shadow: ${({ theme }) => theme.shadows.small};
   transition: transform 0.2s, box-shadow 0.2s;
   text-align: center;
+  min-height: 140px;
+  justify-content: center;
   
   &:hover {
     transform: translateY(-3px);
     box-shadow: ${({ theme }) => theme.shadows.medium};
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding: 2rem 1.5rem;
+    min-height: 120px;
+    
+    &:hover {
+      transform: none; /* Disable hover animations on mobile */
+    }
+    
+    &:active {
+      background-color: ${({ theme }) => theme.colors.light};
+    }
   }
 `;
 
@@ -757,6 +1069,11 @@ const ActionIcon = styled.span`
   font-size: 2.5rem;
   color: ${({ theme }) => theme.colors.primary};
   margin-bottom: 1rem;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    font-size: 3rem;
+    margin-bottom: 1.25rem;
+  }
 `;
 
 const ActionTitle = styled.div`
@@ -772,6 +1089,58 @@ const ActionDescription = styled.div`
 
 const StyledLink = styled(Link)`
   text-decoration: none;
+`;
+
+const SetupLink = styled.div`
+  margin-top: 0.5rem;
+  text-align: center;
+`;
+
+const WeightCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem;
+  background-color: ${({ theme }) => theme.colors.white};
+  border-radius: ${({ theme }) => theme.borderRadius.medium};
+  box-shadow: ${({ theme }) => theme.shadows.small};
+  transition: transform 0.2s, box-shadow 0.2s;
+  text-align: center;
+  min-height: 140px;
+  justify-content: center;
+  
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: ${({ theme }) => theme.shadows.medium};
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding: 2rem 1.5rem;
+    min-height: 120px;
+    
+    &:hover {
+      transform: none; /* Disable hover animations on mobile */
+    }
+    
+    &:active {
+      background-color: ${({ theme }) => theme.colors.light};
+    }
+  }
+`;
+
+const WeightForm = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+`;
+
+const WeightInput = styled.input`
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid ${({ theme }) => theme.colors.neutral}22;
+  border-radius: ${({ theme }) => theme.borderRadius.medium};
+  margin-bottom: 0.75rem;
 `;
 
 export default Dashboard;

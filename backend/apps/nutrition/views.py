@@ -19,6 +19,18 @@ from django.db.models import Sum
 from datetime import datetime, timedelta, date as py_date
 from django.utils import timezone
 import calendar
+import logging
+
+logger = logging.getLogger(__name__)
+
+def get_user_current_date(user):
+    """Get current date in user's timezone"""
+    if user and hasattr(user, 'profile') and user.profile:
+        try:
+            return user.profile.get_current_date()
+        except:
+            pass
+    return py_date.today()
 
 class MealEntryViewSet(viewsets.ModelViewSet):
     """ViewSet for meal entries"""
@@ -108,7 +120,7 @@ class WeightEntryViewSet(viewsets.ModelViewSet):
         return WeightEntry.objects.filter(user=self.request.user).order_by('-date')
 
     def perform_create(self, serializer):
-        date = serializer.validated_data.get('date', timezone.now().date())
+        date = serializer.validated_data.get('date', get_user_current_date(self.request.user))
         weight = serializer.validated_data['weight']
         
         # Use update_or_create but don't save the serializer separately
@@ -128,12 +140,12 @@ class DailyNutritionReportAPIView(views.APIView):
     def get(self, request, *args, **kwargs):
         date_str = request.query_params.get('date')
         if not date_str:
-            query_date = timezone.now().date()
+            query_date = get_user_current_date(request.user)
         else:
             try:
                 # Parse the date exactly as sent from frontend
                 query_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                print(f"Requested date from frontend: {date_str} → Parsed as: {query_date}")
+                logger.debug(f"Requested date from frontend: {date_str} → Parsed as: {query_date}")
             except ValueError:
                 return Response(
                     {"error": "Invalid date format. Use YYYY-MM-DD"}, 
@@ -148,12 +160,12 @@ class DailyNutritionReportAPIView(views.APIView):
         weight_entry = WeightEntry.objects.filter(user=user, date=query_date).first()
 
         # Debug log exact database queries
-        print(f"Database queries:")
-        print(f"- Query date (exact): {query_date}")
-        print(f"- MealEntry SQL: {meals_queryset.query}")
-        print(f"- ExerciseEntry SQL: {exercises_queryset.query}")
-        print(f"- Found {meals_queryset.count()} meal entries")
-        print(f"- Found {exercises_queryset.count()} exercise entries")
+        logger.debug(f"Database queries:")
+        logger.debug(f"- Query date (exact): {query_date}")
+        logger.debug(f"- MealEntry SQL: {meals_queryset.query}")
+        logger.debug(f"- ExerciseEntry SQL: {exercises_queryset.query}")
+        logger.debug(f"- Found {meals_queryset.count()} meal entries")
+        logger.debug(f"- Found {exercises_queryset.count()} exercise entries")
 
         report_data_for_serializer = {
             'date': query_date,
@@ -183,6 +195,7 @@ class WeeklyReportAPIView(views.APIView):
             date_str = request.query_params.get('date')
             if date_str:
                 try:
+                    # This is the date the user is viewing/selected
                     current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 except ValueError:
                     return Response(
@@ -190,7 +203,7 @@ class WeeklyReportAPIView(views.APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
             else:
-                current_date = timezone.now().date()
+                current_date = get_user_current_date(request.user)
             
             # Get user's preferred start of week from profile (default to Wednesday if not set)
             start_of_week = 2  # Default to Wednesday
@@ -198,26 +211,30 @@ class WeeklyReportAPIView(views.APIView):
                 start_of_week = user.profile.start_of_week
             
             # Calculate start and end dates for the week based on user preference
-            # Weekday values: Monday is 0, Tuesday is 1, Wednesday is 2, etc.
+            # Find the most recent occurrence of the preferred start day
             weekday = current_date.weekday()
             
             # Print out some debugging info
-            print(f"Current date: {current_date}, weekday: {weekday} ({['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][weekday]})")
-            print(f"User's preferred start of week: {start_of_week} ({['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][start_of_week]})")
+            logger.debug(f"Current date: {current_date}, weekday: {weekday} ({['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][weekday]})")
+            logger.debug(f"User's preferred start of week: {start_of_week} ({['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][start_of_week]})")
             
-            # Days to subtract to get to preferred start day (or today if it's the start day)
-            days_to_start_day = (weekday - start_of_week) % 7
+            # Calculate days back to the start of the week
+            # If today is the start day or after, go back to that start day
+            # If today is before the start day, go back to the previous week's start day
+            if weekday >= start_of_week:
+                days_back = weekday - start_of_week
+            else:
+                days_back = weekday + (7 - start_of_week)
             
-            print(f"Days to start day: {days_to_start_day}")
+            logger.debug(f"Days back to start day: {days_back}")
             
-            # Start from the user's preferred start day
-            start_date = current_date - timedelta(days=days_to_start_day)
-            # End on the day before the next start day (6 days later)
+            # Calculate the actual week boundaries
+            start_date = current_date - timedelta(days=days_back)
             end_date = start_date + timedelta(days=6)
             
-            print(f"Calculated week: {start_date} to {end_date}")
-            print(f"Start date weekday: {start_date.weekday()} ({['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][start_date.weekday()]})")
-            print(f"End date weekday: {end_date.weekday()} ({['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][end_date.weekday()]})")
+            logger.debug(f"Calculated week: {start_date} to {end_date}")
+            logger.debug(f"Start date weekday: {start_date.weekday()} ({['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][start_date.weekday()]})")
+            logger.debug(f"End date weekday: {end_date.weekday()} ({['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][end_date.weekday()]})")
             
             # Initialize the response data
             daily_summaries = []
@@ -248,7 +265,7 @@ class WeeklyReportAPIView(views.APIView):
                         weight_loss_calories_per_day = (weight_loss_goal * 3500) / 7
                         net_calories = round(user.profile.metabolic_rate - weight_loss_calories_per_day - total_food_calories + total_exercise_calories)
                 except (AttributeError, Exception) as e:
-                    print(f"Error calculating net calories: {e}")
+                    logger.error(f"Error calculating net calories: {e}")
                 
                 # Add to daily summaries
                 daily_summaries.append({
@@ -280,7 +297,7 @@ class WeeklyReportAPIView(views.APIView):
             serializer = WeeklyReportSerializer(response_data)
             return Response(serializer.data)
         except Exception as e:
-            print(f"Error in weekly report: {e}")
+            logger.error(f"Error in weekly report: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class MonthlyReportAPIView(views.APIView):
@@ -290,8 +307,9 @@ class MonthlyReportAPIView(views.APIView):
             user = request.user
             
             # Get month and year parameters or use current date
-            year = int(request.query_params.get('year', timezone.now().year))
-            month = int(request.query_params.get('month', timezone.now().month))
+            current_date = get_user_current_date(request.user)
+            year = int(request.query_params.get('year', current_date.year))
+            month = int(request.query_params.get('month', current_date.month))
             
             # Calculate number of days in the month
             _, days_in_month = calendar.monthrange(year, month)
@@ -329,7 +347,7 @@ class MonthlyReportAPIView(views.APIView):
                         weight_loss_calories_per_day = (weight_loss_goal * 3500) / 7
                         net_calories = round(user.profile.metabolic_rate - weight_loss_calories_per_day - daily_food_calories + daily_exercise_calories)
                 except (AttributeError, Exception) as e:
-                    print(f"Error calculating net calories: {e}")
+                    logger.error(f"Error calculating net calories: {e}")
                 
                 # Only add days with data
                 if daily_food_calories > 0 or daily_exercise_calories > 0 or weight is not None:
@@ -362,7 +380,7 @@ class MonthlyReportAPIView(views.APIView):
             serializer = MonthlyReportSerializer(response_data)
             return Response(serializer.data)
         except Exception as e:
-            print(f"Error in monthly report: {e}")
+            logger.error(f"Error in monthly report: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class YearlyReportAPIView(views.APIView):
@@ -372,7 +390,8 @@ class YearlyReportAPIView(views.APIView):
             user = request.user
             
             # Get year parameter or use current year
-            year = int(request.query_params.get('year', timezone.now().year))
+            current_date = get_user_current_date(request.user)
+            year = int(request.query_params.get('year', current_date.year))
             
             # Create date range for the year
             start_date = datetime(year, 1, 1).date()
@@ -422,7 +441,7 @@ class YearlyReportAPIView(views.APIView):
                             # No food or exercise logged, set net calories to 0
                             monthly_net_calories = 0
                 except (AttributeError, Exception) as e:
-                    print(f"Error calculating net calories: {e}")
+                    logger.error(f"Error calculating net calories: {e}")
                 
                 # Get average weight for the month (if available)
                 weight_entries = WeightEntry.objects.filter(
@@ -485,6 +504,6 @@ class YearlyReportAPIView(views.APIView):
             serializer = YearlyReportSerializer(response_data)
             return Response(serializer.data)
         except Exception as e:
-            print(f"Error in yearly report: {e}")
+            logger.error(f"Error in yearly report: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -1,157 +1,258 @@
-Calorie & Weight Tracker
-A comprehensive mobile-first application for tracking daily calories, exercise, and weight to support personal weight management goals.
-Overview
-This application helps users monitor their daily food intake, exercise activities, and weight progression. It calculates net calories based on each user's metabolic rate and weight loss goals, providing accurate insights into their progress toward weight management objectives.
-Features
-Daily Logging: Log food intake (breakfast, lunch, dinner, snacks), exercises, and weight in a streamlined interface
-Smart Calculations: Automatic net calorie calculations based on your personal metabolic rate and weight loss goals
-Date Navigation: Easily navigate between dates to view or edit entries
-Customizable Profile: Set your Basal Metabolic Rate (BMR) and weekly weight loss goals
-Comprehensive Reports:
-Weekly View: Wednesday-to-Tuesday cycle with daily calorie visualization and cumulative net calorie tracking
-Monthly View: Monthly calorie and weight progression summary
-Yearly View: Long-term trend analysis and visualization
-Mobile-First Design: Optimized for easy use on mobile devices
-Technology Stack
-Frontend: React.js with styled-components
-Backend: Django REST Framework
-Database: PostgreSQL
-Containerization: Docker & Docker Compose
-Getting Started
-Prerequisites
-Docker and Docker Compose installed on your system
-Git
-Installation
-Clone the repository:
-Apply to README.md
-Run
-tracker
-Start the application:
-Apply to README.md
-Run
-up
-Access the application:
-Frontend: http://localhost:3000
-Backend API: http://localhost:8000/api/
-Development Setup
-For local development without Docker:
-Backend setup:
-Apply to README.md
-Run
-runserver
-Frontend setup:
-Apply to README.md
-Run
-start
-Usage
-Creating an Account
-Navigate to the Registration page
-Enter your username, email, and password
-Set your initial BMR and weight loss goal in the profile setup
-Daily Tracking
-Use the Daily Entry page to log your meals and exercises
-Add meals by selecting the meal type, description, and calorie amount
-Log exercises with description, duration, and calories burned
-Record your daily weight to track progress
-Viewing Reports
-Weekly Report: Navigate to the Weekly tab to see your Wednesday-to-Tuesday cycle
-Monthly Report: View the Monthly tab for calendar month summaries
-Yearly Report: Check the Yearly tab for long-term trends
-Project Structure
-Apply to README.md
-configuration
-API Endpoints
-Authentication
-POST /api/auth/register/: Register a new user
-POST /api/auth/login/: Login with credentials
-POST /api/auth/logout/: Logout the current user
-Profile
-GET /api/users/profile/: Get current user profile
-PATCH /api/users/profile/metrics/: Update user metrics (BMR, weight loss goal)
-Nutrition Tracking
-GET /api/nutrition/daily/date/?date=YYYY-MM-DD: Get or create daily entry for date
-PATCH /api/nutrition/daily/{id}/: Update a daily entry
-POST /api/nutrition/meals/: Add a meal entry
-DELETE /api/nutrition/meals/{id}/: Delete a meal entry
-POST /api/nutrition/exercises/: Add an exercise entry
-DELETE /api/nutrition/exercises/{id}/: Delete an exercise entry
-Reports
-GET /api/nutrition/daily/weekly/?date=YYYY-MM-DD: Get weekly report data
-GET /api/nutrition/daily/monthly/?month=MM&year=YYYY: Get monthly report data
-GET /api/nutrition/daily/yearly/?year=YYYY: Get yearly report data
-Deployment
-The application is containerized for easy deployment:
-Update environment variables in docker-compose.yml for production
-Build and start the containers: docker-compose up -d --build
-Access the application on the configured host and port
-For production deployment, consider:
-Using a reverse proxy like Nginx
-Enabling HTTPS with Let's Encrypt
-Setting up proper database backups
-Configuring environment-specific settings
-License
+# Samaanai - Personal Finance & Nutrition Tracker
+
+A comprehensive personal finance and nutrition tracking application built with Django REST Framework and React.
+
+## Features
+
+### Finance App
+- **Bank Account Integration**: Connect multiple bank accounts via Plaid
+- **Transaction Management**: Automatically sync and categorize transactions
+- **Investment Tracking**: Monitor stock holdings and performance
+- **Custom Categories**: Set personal spending categories
+- **Analytics Dashboard**: Visual spending insights and trends
+- **OAuth Support**: Works with Chase and other OAuth institutions
+
+### Nutrition App
+- **Food Logging**: Track meals and nutrition intake
+- **Calorie Counting**: Monitor daily caloric consumption
+- **Nutritional Analysis**: Detailed breakdown of macros and nutrients
+
+## Development Setup
+
+### Prerequisites
+- Docker and Docker Compose
+- OpenSSL (for HTTPS certificates)
+
+### Quick Start (HTTP)
+```bash
+# Clone the repository
+git clone <repository-url>
+cd Samaanai_view
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your configuration
+nano .env
+
+# Start development servers
+docker-compose up --build
+```
+
+### HTTPS Development Setup (Required for Chase OAuth)
+
+For testing OAuth institutions like Chase Bank, you need HTTPS:
+
+```bash
+# Generate SSL certificates for localhost
+./scripts/generate-ssl-certs.sh
+
+# Start HTTPS development environment
+./scripts/dev-https.sh
+
+# Or manually:
+docker-compose -f docker-compose.yml -f docker-compose.https.yml up --build
+```
+
+**Access Points:**
+- **Frontend**: https://localhost
+- **Backend API**: https://localhost/api
+- **Django Admin**: https://localhost/admin
+
+**Important**: Your browser will show a security warning for self-signed certificates. Click "Advanced" → "Proceed to localhost (unsafe)" to continue.
+
+### Environment Configuration
+
+Create a `.env` file with the following variables:
+
+```env
+# Database
+POSTGRES_DB=samaanai_dev
+POSTGRES_USER=testuser
+POSTGRES_PASSWORD=testpass123
+
+# Django
+SECRET_KEY=your-secret-key
+DEBUG=True
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Plaid Integration
+PLAID_CLIENT_ID=your_plaid_client_id
+PLAID_SECRET_SANDBOX=your_plaid_sandbox_secret
+PLAID_SECRET_PRODUCTION=your_plaid_production_secret
+PLAID_ENV=sandbox
+PLAID_WEBHOOK_URL=https://your-domain.com/api/finance/webhooks/plaid/
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Frontend URL (important for OAuth)
+FRONTEND_URL=https://localhost  # Use https:// for OAuth testing
+```
+
+## OAuth Institution Testing
+
+### Chase Bank Integration
+
+Chase requires OAuth authentication, which needs HTTPS:
+
+1. **Development**: Use the HTTPS setup above
+2. **Production**: Ensure your domain has a valid SSL certificate
+
+**Why HTTPS is Required:**
+- Plaid only allows OAuth redirect URIs with HTTPS
+- Chase and other major banks require secure OAuth flows
+- Enhanced security for financial data
+
+### Supported OAuth Institutions
+- Chase Bank
+- Bank of America (some accounts)
+- Wells Fargo (select products)
+- Many credit unions
+
+### Non-OAuth Institutions
+These work with HTTP in development:
+- Community banks
+- Smaller regional banks
+- Some credit unions
+
+## Docker Services
+
+### Regular Development
+```bash
+# Start all services
+docker-compose up
+
+# Backend only
+docker-compose up backend db
+
+# Frontend only  
+docker-compose up frontend
+```
+
+### HTTPS Development
+```bash
+# Full HTTPS stack
+docker-compose -f docker-compose.yml -f docker-compose.https.yml up
+
+# With rebuild
+docker-compose -f docker-compose.yml -f docker-compose.https.yml up --build
+```
+
+## Testing
+
+### Comprehensive Test Suite
+```bash
+# Run all tests with coverage
+npm run test:all
+
+# Run specific app tests
+npm run test:nutrition
+npm run test:finance
+
+# Run with Docker
+./docker-test.sh
+```
+
+### Test Options
+1. **Quick Tests**: Essential tests only
+2. **Full Test Suite**: All tests with coverage
+3. **Individual Apps**: Test specific functionality
+4. **Docker Tests**: Isolated test environment
+5. **CI/CD Tests**: Production-like testing
+
+## API Documentation
+
+### Finance Endpoints
+- `GET /api/finance/dashboard/` - Dashboard data
+- `GET /api/finance/accounts/` - Bank accounts
+- `GET /api/finance/transactions/` - Transaction history
+- `POST /api/finance/institutions/` - Add new institution
+- `GET /api/finance/holdings/` - Investment holdings
+
+### Authentication
+- `POST /api/auth/login/` - Login
+- `POST /api/auth/register/` - Register
+- `POST /api/auth/google/` - Google OAuth
+
+## Security Features
+
+### HTTPS Configuration
+- Self-signed certificates for development
+- Proper SSL headers via NGINX reverse proxy
+- Secure cookie settings for production
+
+### Financial Data Protection
+- Encrypted Plaid tokens
+- Secure OAuth flows
+- CORS protection
+- CSRF protection
+
+## Troubleshooting
+
+### Chase OAuth Issues
+1. **"Your account settings are incompatible"**
+   - This means Chase requires OAuth
+   - Use HTTPS development setup
+   - Check MFA settings in Chase account
+
+2. **Certificate Warnings**
+   - Normal for self-signed certificates
+   - Click "Advanced" → "Proceed to localhost"
+   - Or add certificate to system trust store
+
+3. **OAuth Redirect Errors**
+   - Ensure `FRONTEND_URL=https://localhost` in .env
+   - Verify SSL certificates are generated
+   - Check that OAuth callback route exists
+
+### General Issues
+1. **Port Conflicts**
+   ```bash
+   docker-compose down
+   docker system prune -f
+   ```
+
+2. **Database Issues**
+   ```bash
+   docker-compose down -v  # Removes volumes
+   docker-compose up --build
+   ```
+
+3. **Frontend Hot Reload**
+   ```bash
+   # Ensure proper bind mount in docker-compose.yml
+   volumes:
+     - ./frontend:/app
+     - /app/node_modules
+   ```
+
+## Production Deployment
+
+### Environment Setup
+- Use production database (PostgreSQL/MySQL)
+- Set `DEBUG=False`
+- Configure proper SSL certificates
+- Set strong `SECRET_KEY`
+- Use production Plaid environment
+
+### Security Checklist
+- [ ] HTTPS certificate from trusted CA
+- [ ] Secure environment variables
+- [ ] Database encryption
+- [ ] Regular security updates
+- [ ] Backup strategy
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass
+6. Submit a pull request
+
+## License
+
 This project is licensed under the MIT License - see the LICENSE file for details.
-Acknowledgements
-React.js and Django communities for the excellent documentation
-All contributors who have helped shape this project
-
-## 8. Testing
-
-### 8.1 Run All Tests (Locally)
-This will run backend, frontend, and E2E (Cypress) tests using the test Docker Compose environment:
-
-```bash
-./run_tests.sh
-```
-
-### 8.2 Run Backend Tests Only
-```bash
-docker-compose -f docker-compose.test.yml run --rm backend-test
-```
-
-### 8.3 Run Frontend Unit Tests Only
-```bash
-docker-compose -f docker-compose.test.yml run --rm frontend-test
-```
-
-### 8.4 Run Cypress E2E Tests Only
-First, start the required services:
-```bash
-docker-compose -f docker-compose.test.yml up -d db backend frontend
-```
-Then, in a separate terminal, run:
-```bash
-docker-compose -f docker-compose.test.yml run --rm cypress
-```
-When finished, stop the services:
-```bash
-docker-compose -f docker-compose.test.yml down
-```
-
-### 8.5 View Test Summary
-After running `./run_tests.sh`, generate a consolidated summary:
-```bash
-./generate_test_summary.sh
-```
-The summary will be available in the `logs/` directory.
-
-## 9. Continuous Integration / Deployment (CI/CD)
-
-### 9.1 Automated Testing in Google Cloud Build
-- **Cloud Build is configured to run all tests automatically before building and deploying.**
-- The test steps are defined in `cloudbuild-backend.yaml` and `cloudbuild-frontend.yaml`.
-- If any test fails, the build and deployment will be stopped.
-
-**You do not need to do anything extra** as long as your Cloud Build triggers are set up to use these YAML files (see below).
-
-### 9.2 How it Works
-- **Frontend:**  
-  - Runs unit tests and Cypress E2E tests using `docker-compose.test.yml`  
-  - Only builds, pushes, and deploys if all tests pass
-- **Backend:**  
-  - Runs backend tests using `docker-compose.test.yml`  
-  - Only builds, pushes, and deploys if all tests pass
-
-### 9.3 Cloud Build Trigger Setup
-- Make sure your Google Cloud Build triggers are configured to use `cloudbuild-backend.yaml` and `cloudbuild-frontend.yaml` for the respective services.
-- No further action is needed if your triggers are already set up.

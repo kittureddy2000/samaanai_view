@@ -149,11 +149,11 @@ const YearlyReport = () => {
         {
           label: 'Average Weight (lbs)',
           data: monthsWithWeight.map(entry => entry.average_weight),
-          borderColor: 'rgba(75, 192, 192, 1)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          borderColor: 'rgba(33, 150, 243, 1)',
+          backgroundColor: 'rgba(33, 150, 243, 0.2)',
           borderWidth: 2,
           pointRadius: 4,
-          pointBackgroundColor: 'rgba(75, 192, 192, 1)',
+          pointBackgroundColor: 'rgba(33, 150, 243, 1)',
           tension: 0.1,
           fill: true
         }
@@ -188,9 +188,11 @@ const YearlyReport = () => {
         {
           label: 'Food Calories',
           data: monthlyData,
-          backgroundColor: 'rgba(255, 159, 64, 0.7)',
-          borderColor: 'rgba(255, 159, 64, 1)',
-          borderWidth: 1,
+          borderColor: 'rgba(33, 150, 243, 1)',
+          backgroundColor: 'rgba(33, 150, 243, 0.2)',
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: 'rgba(33, 150, 243, 1)'
         }
       ]
     };
@@ -223,8 +225,8 @@ const YearlyReport = () => {
         {
           label: 'Exercise Calories',
           data: monthlyData,
-          backgroundColor: 'rgba(54, 162, 235, 0.7)',
-          borderColor: 'rgba(54, 162, 235, 1)',
+          backgroundColor: 'rgba(25, 118, 210, 0.7)',
+          borderColor: 'rgba(25, 118, 210, 1)',
           borderWidth: 1,
         }
       ]
@@ -952,25 +954,40 @@ const ChartContainer = styled.div`
   @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
     height: 300px;
   }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.xs}) {
+    height: 250px;
+  }
 `;
 
 const TableWrapper = styled.div`
   overflow-x: auto;
+  margin: 0 -1rem; /* Extend to container edges on mobile */
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    margin: 0 -1.5rem;
+    border-radius: 0;
+  }
 `;
 
 const MonthlyTable = styled.table`
   width: 100%;
   border-collapse: collapse;
+  min-width: 600px; /* Prevent table from becoming too cramped */
   
   th, td {
     padding: 0.75rem;
     text-align: left;
     border-bottom: 1px solid ${({ theme }) => theme.colors.neutral}22;
+    white-space: nowrap;
   }
   
   th {
     font-weight: 500;
     background-color: ${({ theme }) => theme.colors.light};
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
   
   tbody tr:hover {
@@ -992,8 +1009,21 @@ const MonthlyTable = styled.table`
   
   @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
     th, td {
-      padding: 0.5rem;
+      padding: 0.5rem 0.75rem;
       font-size: 0.875rem;
+    }
+    
+    th:first-child, td:first-child {
+      position: sticky;
+      left: 0;
+      background-color: ${({ theme }) => theme.colors.white};
+      z-index: 2;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    }
+    
+    th:first-child {
+      background-color: ${({ theme }) => theme.colors.light};
+      z-index: 3;
     }
   }
 `;

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { format, addDays, subDays } from 'date-fns';
+import { addDays, subDays } from 'date-fns';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
 import nutritionService from '../services/nutritionService';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../../common/auth';
 
 import {
   Card,
@@ -41,28 +42,7 @@ const DailyEntry = () => {
       setLoading(true);
       setError('');
       
-      // Debug date timezone issues
-      console.log("Date debugging:");
-      console.log("- selectedDate:", selectedDate);
-      console.log("- Local ISO string:", selectedDate.toISOString());
-      console.log("- Date components:", {
-        year: selectedDate.getFullYear(),
-        month: selectedDate.getMonth() + 1, // 0-indexed
-        day: selectedDate.getDate(),
-        hours: selectedDate.getHours(),
-        minutes: selectedDate.getMinutes()
-      });
-      console.log("- UTC components:", {
-        year: selectedDate.getUTCFullYear(),
-        month: selectedDate.getUTCMonth() + 1, // 0-indexed
-        day: selectedDate.getUTCDate(),
-        hours: selectedDate.getUTCHours(),
-        minutes: selectedDate.getUTCMinutes()
-      });
-      console.log("- Timezone offset in minutes:", selectedDate.getTimezoneOffset());
-      
       const data = await nutritionService.getDailyReport(selectedDate);
-      console.log("- API returned date:", data.date);
       
       setDailyReportData(data);
 
@@ -171,28 +151,8 @@ const DailyEntry = () => {
     }
   };
   
-  const handleDeleteMealEntry = async (id) => {
-    try {
-      await nutritionService.deleteMealEntry(id);
-      fetchDailyReport();
-    } catch (err) {
-      console.error('Error deleting meal entry:', err);
-      setError('Failed to delete meal entry. Please try again.');
-    }
-  };
-  
-  const handleDeleteExerciseEntry = async (id) => {
-    try {
-      await nutritionService.deleteExerciseEntry(id);
-      fetchDailyReport();
-    } catch (err) {
-      console.error('Error deleting exercise entry:', err);
-      setError('Failed to delete exercise entry. Please try again.');
-    }
-  };
-  
   const calculateNetCalories = () => {
-    if (!dailyReportData || !currentUser?.profile?.metabolic_rate) return null;
+    if (!dailyReportData) return null;
     
     const { total_food_calories, total_exercise_calories } = dailyReportData;
     
@@ -200,7 +160,9 @@ const DailyEntry = () => {
     const hasData = (total_food_calories > 0 || total_exercise_calories > 0);
     if (!hasData) return 0;
     
-    const { metabolic_rate, weight_loss_goal } = currentUser.profile;
+    // Use default metabolic rate of 2000 if not set
+    const metabolic_rate = currentUser?.profile?.metabolic_rate || 2000;
+    const weight_loss_goal = currentUser?.profile?.weight_loss_goal || 0;
     const weightLossCaloriesPerDay = (weight_loss_goal * 3500) / 7;
     
     return Math.round(
@@ -250,16 +212,18 @@ const DailyEntry = () => {
         </ErrorBanner>
       )}
       
-      <SummaryCard>
+      {/* Show stats on desktop, hide on mobile initially */}
+      <SummaryCard className="desktop-stats">
         <Grid columns="repeat(3, 1fr)" mobileColumns="repeat(1, 1fr)" gap="lg">
-          <CalorieBox title="Food" value={dailyReportData?.total_food_calories || 0} icon="restaurant" color="danger" />
-          <CalorieBox title="Exercise" value={dailyReportData?.total_exercise_calories || 0} icon="fitness_center" color="primary" />
+          <CalorieBox title="Food" value={dailyReportData?.total_food_calories || 0} icon="restaurant" color="primary" />
+          <CalorieBox title="Exercise" value={dailyReportData?.total_exercise_calories || 0} icon="fitness_center" color="info" />
           <CalorieBox 
             title="Net Calories" 
             value={calculateNetCalories()} 
             icon="calculate" 
             color="secondary"
             tooltip="Metabolic Rate - Weight Loss Goal - Food + Exercise"
+            showSetupLink={!currentUser?.profile?.metabolic_rate}
           />
         </Grid>
       </SummaryCard>
@@ -295,52 +259,42 @@ const DailyEntry = () => {
         </Flex>
       </EntryFormCard>
       
-      <EntriesDisplayCard>
-        <Title size="1.25rem">Logged Entries for {format(selectedDate, 'MMMM d')}</Title>
-        <Grid columns="repeat(2, 1fr)" mobileColumns="1fr" gap="lg">
-          <div>
-            <Flex justify="space-between" align="center" style={{ marginBottom: '0.5rem'}}>
-              <SectionTitle>Food ({dailyReportData?.total_food_calories || 0} cal)</SectionTitle>
-            </Flex>
-            <EntryList>
-              {dailyReportData?.meals && dailyReportData.meals.length > 0 ? dailyReportData.meals.map(meal => (
-                <EntryItem key={meal.id}>
-                  <Flex justify="space-between" align="center">
-                    <div>
-                      <Badge>{meal.meal_type}</Badge>
-                      <Text noMargin>{meal.description} ({meal.calories} cal)</Text>
-                    </div>
-                    <DeleteButton onClick={() => handleDeleteMealEntry(meal.id)} aria-label="Delete meal">
-                      <span className="material-symbols-outlined">delete</span>
-                    </DeleteButton>
-                  </Flex>
-                </EntryItem>
-              )) : <EmptyMessage>No food logged yet.</EmptyMessage>}
-            </EntryList>
-          </div>
-          
-          <div>
-            <Flex justify="space-between" align="center" style={{ marginBottom: '0.5rem'}}>
-                <SectionTitle>Exercise ({dailyReportData?.total_exercise_calories || 0} cal)</SectionTitle>
-            </Flex>
-            <EntryList>
-              {dailyReportData?.exercises && dailyReportData.exercises.length > 0 ? dailyReportData.exercises.map(ex => (
-                <EntryItem key={ex.id}>
-                  <Flex justify="space-between" align="center">
-                    <div>
-                      <Text noMargin>{ex.description} ({ex.calories_burned} cal)</Text>
-                      {ex.duration_minutes && <Text small muted>{ex.duration_minutes} mins</Text>}
-                    </div>
-                    <DeleteButton onClick={() => handleDeleteExerciseEntry(ex.id)} aria-label="Delete exercise">
-                      <span className="material-symbols-outlined">delete</span>
-                    </DeleteButton>
-                  </Flex>
-                </EntryItem>
-              )) : <EmptyMessage>No exercise logged yet.</EmptyMessage>}
-            </EntryList>
-          </div>
-        </Grid>
-      </EntriesDisplayCard>
+      {/* Show stats at bottom on mobile only */}
+      <SummaryCard className="mobile-stats">
+        <Title size="1rem">Today's Summary</Title>
+        <MobileStatsGrid>
+          <MobileStatItem>
+            <span className="material-symbols-outlined">restaurant</span>
+            <div>
+              <div>Food</div>
+              <div>{dailyReportData?.total_food_calories || 0} cal</div>
+            </div>
+          </MobileStatItem>
+          <MobileStatItem>
+            <span className="material-symbols-outlined">fitness_center</span>
+            <div>
+              <div>Exercise</div>
+              <div>{dailyReportData?.total_exercise_calories || 0} cal</div>
+            </div>
+          </MobileStatItem>
+          <MobileStatItem>
+            <span className="material-symbols-outlined">calculate</span>
+            <div>
+              <div>Net Calories</div>
+              <div>{calculateNetCalories() !== null ? calculateNetCalories() : '---'} cal</div>
+              {!currentUser?.profile?.metabolic_rate && (
+                <SetupLink>
+                  <StyledLink to="/nutrition/profile">
+                    <Text size="0.7rem" color="primary" noMargin>
+                      Set up metabolic rate →
+                    </Text>
+                  </StyledLink>
+                </SetupLink>
+              )}
+            </div>
+          </MobileStatItem>
+        </MobileStatsGrid>
+      </SummaryCard>
     </div>
   );
 };
@@ -349,12 +303,21 @@ const DateDisplay = React.forwardRef(({ value, onClick }, ref) => (
   <DateButton onClick={onClick} ref={ref}>{value}</DateButton>
 ));
 
-const CalorieBox = ({ title, value, icon, color, tooltip }) => (
+const CalorieBox = ({ title, value, icon, color, tooltip, showSetupLink }) => (
   <SummaryBox title={tooltip}>
     <SummaryBoxIcon color={color}><span className="material-symbols-outlined">{icon}</span></SummaryBoxIcon>
     <SummaryBoxContent>
       <SummaryBoxTitle>{title}</SummaryBoxTitle>
       <SummaryBoxValue color={color}>{value !== null ? value : '---'} cal</SummaryBoxValue>
+      {showSetupLink && (
+        <SetupLink>
+          <StyledLink to="/nutrition/profile">
+            <Text size="0.75rem" color="primary" noMargin>
+              Set up metabolic rate →
+            </Text>
+          </StyledLink>
+        </SetupLink>
+      )}
     </SummaryBoxContent>
   </SummaryBox>
 );
@@ -365,12 +328,46 @@ const StickyHeader = styled.div`
   z-index: 10;
   background-color: ${({ theme }) => theme.colors.light};
   padding-bottom: 1rem;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding-bottom: 0.75rem;
+    
+    /* Make the flex layout more compact */
+    > div {
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+    
+    h1 {
+      font-size: 1.5rem;
+      text-align: center;
+      margin-bottom: 0;
+    }
+  }
 `;
 
 const DateNavigation = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    gap: 0.25rem;
+    flex-shrink: 0;
+    min-width: 0;
+    
+    /* Keep all items on one line */
+    > button {
+      flex-shrink: 0;
+      padding: 0.5rem;
+      min-width: 40px;
+      
+      span {
+        font-size: 20px;
+      }
+    }
+  }
 `;
 
 const DatePickerWrapper = styled.div`
@@ -391,6 +388,15 @@ const DatePickerWrapper = styled.div`
   .react-datepicker__day--selected {
     background-color: ${({ theme }) => theme.colors.primary};
   }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    flex: 1;
+    min-width: 0;
+    
+    .react-datepicker-wrapper {
+      width: 100%;
+    }
+  }
 `;
 
 const DateButton = styled.button`
@@ -401,8 +407,20 @@ const DateButton = styled.button`
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.2s;
+  min-height: 44px;
+  
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    min-height: 40px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 `;
 
@@ -427,6 +445,22 @@ const LoadingWrapper = styled.div`
 
 const SummaryCard = styled(Card)`
   margin-bottom: 1.5rem;
+  
+  /* Desktop stats - show on desktop, hide on mobile */
+  &.desktop-stats {
+    @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+      display: none;
+    }
+  }
+  
+  /* Mobile stats - hide on desktop, show on mobile */
+  &.mobile-stats {
+    display: none;
+    
+    @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+      display: block;
+    }
+  }
 `;
 
 const SummaryBox = styled.div`
@@ -436,6 +470,14 @@ const SummaryBox = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.medium};
   background-color: ${({ theme }) => theme.colors.white};
   box-shadow: ${({ theme }) => theme.shadows.small};
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    padding: 1.25rem;
+    flex-direction: column;
+    text-align: center;
+    min-height: 140px;
+    justify-content: center;
+  }
 `;
 
 const SummaryBoxIcon = styled.div`
@@ -447,9 +489,22 @@ const SummaryBoxIcon = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.circle};
   background-color: ${({ theme, color }) => theme.colors[color] + '15'};
   margin-right: 1rem;
+  flex-shrink: 0;
+  
   span {
     color: ${({ theme, color }) => theme.colors[color]};
     font-size: 24px;
+  }
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    width: 56px;
+    height: 56px;
+    margin-right: 0;
+    margin-bottom: 0.75rem;
+    
+    span {
+      font-size: 28px;
+    }
   }
 `;
 
@@ -467,64 +522,67 @@ const SummaryBoxValue = styled.div`
   font-size: 1.5rem;
   font-weight: 600;
   color: ${({ theme, color }) => color ? theme.colors[color] : theme.colors.dark};
+  
+  @media (max-width: ${({ theme }) => theme.breakpoints.sm}) {
+    font-size: 1.75rem;
+    margin-top: 0.25rem;
+  }
+`;
+
+const SetupLink = styled.div`
+  margin-top: 0.5rem;
+  text-align: center;
+`;
+
+const StyledLink = styled(Link)`
+  text-decoration: none;
+  
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 const EntryFormCard = styled(Card)`
   margin-top: 1.5rem;
   margin-bottom: 1.5rem;
 `;
-const EntriesDisplayCard = styled(Card)``;
 
-const EntryList = styled.div`
-  margin-top: 8px;
-  max-height: 300px;
-  overflow-y: auto;
+const MobileStatsGrid = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 `;
 
-const EntryItem = styled.div`
-  padding: 8px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  &:last-child {
-    border-bottom: none;
+const MobileStatItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background-color: ${({ theme }) => theme.colors.white};
+  border-radius: ${({ theme }) => theme.borderRadius.medium};
+  box-shadow: ${({ theme }) => theme.shadows.small};
+  
+  span.material-symbols-outlined {
+    font-size: 24px;
+    color: ${({ theme }) => theme.colors.primary};
+    flex-shrink: 0;
   }
-`;
-
-const Badge = styled.span`
-  display: inline-block;
-  padding: 2px 6px;
-  background: ${({ theme }) => theme.colors.lightGrey};
-  border-radius: 4px;
-  font-size: 0.8rem;
-  margin-right: 8px;
-  text-transform: capitalize;
-`;
-
-const DeleteButton = styled.button`
-  background: none;
-  border: none;
-  color: ${({ theme }) => theme.colors.neutral};
-  cursor: pointer;
-  padding: 0.25rem;
-  transition: color 0.2s;
-  &:hover {
-    color: ${({ theme }) => theme.colors.danger};
+  
+  > div:last-child {
+    flex: 1;
+    
+    > div:first-child {
+      font-size: 0.875rem;
+      color: ${({ theme }) => theme.colors.neutral};
+      margin-bottom: 0.25rem;
+    }
+    
+    > div:nth-child(2) {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: ${({ theme }) => theme.colors.dark};
+    }
   }
-  span {
-    font-size: 20px;
-  }
-`;
-
-const EmptyMessage = styled.div`
-  padding: 16px;
-  text-align: center;
-  color: ${({ theme }) => theme.colors.muted};
-  font-style: italic;
-`;
-
-const SectionTitle = styled.h3`
-  font-size: 1rem;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.dark};
 `;
 
 export default DailyEntry;
