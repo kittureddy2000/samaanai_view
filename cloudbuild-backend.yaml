@@ -75,7 +75,7 @@ substitutions:
   _GS_BUCKET_NAME: 'using-ai-405105-static-files' # Updated bucket name
   _DB_NAME: 'samaanai_production' # Fixed database name
   _DB_USER: 'samaanai_user' # Your production DB user
-  _FRONTEND_SERVICE_URL: 'https://samaanai-frontend-1074693546571.us-west1.run.app' # Actual frontend URL
+  _FRONTEND_SERVICE_URL: 'https://samaanai.com' # Updated to custom domain
 
 # Timeout for the entire build
 timeout: '1800s' # 30 minutes
