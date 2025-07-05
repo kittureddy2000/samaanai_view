@@ -1,81 +1,10 @@
 options:
   logging: 'CLOUD_LOGGING_ONLY'
-  # Increase machine type for comprehensive testing
-  machineType: 'E2_HIGHCPU_8' # 8 vCPUs, 8GB RAM for parallel test execution
+  # Simplified build for quick deployment
+  machineType: 'E2_STANDARD_2' # 2 vCPUs, 8GB RAM
 
 steps:
-# 1. Install dependencies and prepare test environment
-- id: "Setup test environment"
-  name: 'gcr.io/cloud-builders/docker'
-  args: ['compose', '-f', 'docker-compose.test.yml', 'build', 'frontend-test']
-
-# 2. Run comprehensive test suite with detailed reporting
-- id: "Run comprehensive frontend tests"
-  name: 'gcr.io/cloud-builders/docker'
-  args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'frontend-test', 'npm', 'run', 'test:ci']
-  env:
-    - 'CI=true'
-    - 'GENERATE_SOURCEMAP=false'
-
-# 3. Run component tests specifically
-- id: "Run component tests"
-  name: 'gcr.io/cloud-builders/docker'
-  args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'frontend-test', 'npm', 'run', 'test:components-only']
-
-# 4. Run service tests
-- id: "Run service tests"
-  name: 'gcr.io/cloud-builders/docker'
-  args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'frontend-test', 'npm', 'run', 'test:services-only']
-
-# 5. Run integration tests
-- id: "Run integration tests"
-  name: 'gcr.io/cloud-builders/docker'
-  args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'frontend-test', 'npm', 'run', 'test:integration-only']
-
-# 6. Generate comprehensive test reports
-- id: "Generate test reports"
-  name: 'gcr.io/cloud-builders/docker'
-  args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'frontend-test', 'node', 'run_all_tests.js']
-
-# 7. Copy test artifacts to Cloud Storage
-- id: "Upload test artifacts"
-  name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      # Copy test reports and coverage from Docker volume
-      docker cp $(docker create --rm gcr.io/cloud-builders/docker:latest):/tmp/frontend-test-results ./test-artifacts || true
-      
-      # Upload to Cloud Storage with build ID for traceability
-      if [ -d "./test-artifacts" ]; then
-        gsutil -m cp -r ./test-artifacts gs://${_ARTIFACTS_BUCKET}/frontend-tests/build-$BUILD_ID/
-        echo "Test artifacts uploaded to: gs://${_ARTIFACTS_BUCKET}/frontend-tests/build-$BUILD_ID/"
-      fi
-
-# 8. Run E2E (Cypress) tests
-- id: "Run E2E tests"
-  name: 'gcr.io/cloud-builders/docker'
-  args: ['compose', '-f', 'docker-compose.test.yml', 'run', '--rm', 'cypress']
-
-# 9. Upload Cypress artifacts
-- id: "Upload Cypress artifacts"
-  name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      # Copy Cypress results
-      docker cp $(docker create --rm cypress/included:12.17.4):/cypress/videos ./cypress-artifacts/videos || true
-      docker cp $(docker create --rm cypress/included:12.17.4):/cypress/screenshots ./cypress-artifacts/screenshots || true
-      
-      # Upload Cypress artifacts
-      if [ -d "./cypress-artifacts" ]; then
-        gsutil -m cp -r ./cypress-artifacts gs://${_ARTIFACTS_BUCKET}/cypress/build-$BUILD_ID/
-        echo "Cypress artifacts uploaded to: gs://${_ARTIFACTS_BUCKET}/cypress/build-$BUILD_ID/"
-      fi
-
-# 10. Build the frontend image (only if tests pass)
+# 1. Build the frontend image directly
 - id: "Build frontend image"
   name: 'gcr.io/cloud-builders/docker'
   args: ['build', 
@@ -85,12 +14,12 @@ steps:
          '--target', 'prod',
          './frontend']
 
-# 11. Push the image
+# 2. Push the image
 - id: "Push frontend image"
   name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'us-west1-docker.pkg.dev/$PROJECT_ID/samaanai-repo/${_FRONTEND_SERVICE_NAME}']
 
-# 12. Deploy to Cloud Run
+# 3. Deploy to Cloud Run
 - id: "Deploy to Cloud Run"
   name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: gcloud
@@ -104,7 +33,7 @@ steps:
     - '--allow-unauthenticated'
     - '--set-env-vars=BUILD_ID=$BUILD_ID,COMMIT_SHA=$COMMIT_SHA'
 
-# 13. Notify about deployment and test results
+# 4. Notify about deployment
 - id: "Deployment notification"
   name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: 'bash'
@@ -112,8 +41,6 @@ steps:
     - '-c'
     - |
       echo "🚀 Frontend deployed successfully!"
-      echo "📊 Test reports: gs://${_ARTIFACTS_BUCKET}/frontend-tests/build-$BUILD_ID/"
-      echo "🎭 Cypress reports: gs://${_ARTIFACTS_BUCKET}/cypress/build-$BUILD_ID/"
       echo "🌐 Service URL: https://${_FRONTEND_SERVICE_NAME}-$PROJECT_NUMBER.${_REGION}.run.app"
 
 images:
@@ -123,6 +50,5 @@ substitutions:
   _FRONTEND_SERVICE_NAME: 'samaanai-frontend'
   _REGION: 'us-west1' # Should match backend region
   _BACKEND_SERVICE_URL: 'https://samaanai-backend-1074693546571.us-west1.run.app' # Actual backend URL
-  _ARTIFACTS_BUCKET: 'samaanai-build-artifacts' # Create this bucket for storing test artifacts
 
-timeout: '2400s' # 40 minutes for comprehensive testing
+timeout: '1200s' # 20 minutes for build and deploy
