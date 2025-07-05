@@ -72,8 +72,8 @@ substitutions:
   _BACKEND_SERVICE_NAME: 'samaanai-backend' # Better naming convention
   _REGION: 'us-west1' # Choose your preferred region
   _CLOUD_SQL_CONNECTION_NAME: 'using-ai-405105:us-west1:samaanai-postgres' # Updated with actual project ID
-  _GS_BUCKET_NAME: 'samaanai-storage-bucket' # Create this bucket in GCS
-  _DB_NAME: 'samaanai_view' # Your production DB name
+  _GS_BUCKET_NAME: 'using-ai-405105-static-files' # Updated bucket name
+  _DB_NAME: 'samaanai_production' # Fixed database name
   _DB_USER: 'samaanai_user' # Your production DB user
   _FRONTEND_SERVICE_URL: 'https://samaanai-frontend-1074693546571.us-west1.run.app' # Actual frontend URL
 
