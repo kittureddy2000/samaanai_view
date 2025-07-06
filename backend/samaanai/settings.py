@@ -344,10 +344,32 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
+# Session configuration for OAuth
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_COOKIE_SECURE = not DEBUG  # Use secure cookies in production
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_SAVE_EVERY_REQUEST = True
+
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = env('GOOGLE_CLIENT_ID', default='')
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = env('GOOGLE_CLIENT_SECRET', default='')
 SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ['email', 'profile']
 SOCIAL_AUTH_URL_NAMESPACE = 'social'
+
+# Add session storage configuration for OAuth state
+SOCIAL_AUTH_STORAGE = 'social_django.models.DjangoStorage'
+SOCIAL_AUTH_STRATEGY = 'social_django.strategy.DjangoStrategy'
+
+# OAuth security settings
+SOCIAL_AUTH_RAISE_EXCEPTIONS = False
+SOCIAL_AUTH_LOGIN_ERROR_URL = '/login?error=oauth_error'
+SOCIAL_AUTH_SANITIZE_REDIRECTS = False
+SOCIAL_AUTH_ALLOWED_REDIRECT_URIS = [
+    f'{FRONTEND_URL}/social-login-callback',
+    f'{FRONTEND_URL}/login',
+    f'{FRONTEND_URL}/',
+]
 
 # Validate Google OAuth credentials
 if not SOCIAL_AUTH_GOOGLE_OAUTH2_KEY:
