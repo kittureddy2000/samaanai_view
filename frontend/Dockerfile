@@ -25,7 +25,9 @@ RUN echo "--- Checking for notistack after COPY . .: ---" && ls -d /app/node_mod
 
 # Build for production if needed
 ARG ENVIRONMENT=production
+ARG REACT_APP_API_URL
 ENV ENVIRONMENT=${ENVIRONMENT}
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
 RUN if [ "$ENVIRONMENT" = "production" ]; then npm run build; fi
 
 # --- Production stage ---
