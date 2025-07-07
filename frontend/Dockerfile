@@ -17,6 +17,10 @@ COPY public ./public
 
 # Copy the rest of the project files
 COPY . .
+COPY nginx.conf /app/nginx.conf
+COPY start-nginx.sh /app/start-nginx.sh
+
+# Ensure nginx config and start script are present for later stage
 
 # --- Debug: Check node_modules after COPY . . ---
 RUN echo "--- After COPY . ., /app/node_modules content (first 15): ---" && ls -A /app/node_modules | head -n 15 && echo "--- End of /app/node_modules listing ---"
@@ -31,18 +35,12 @@ ENV REACT_APP_API_URL=${REACT_APP_API_URL}
 RUN if [ "$ENVIRONMENT" = "production" ]; then npm run build; fi
 
 # --- Production stage ---
-FROM nginx:alpine AS prod
-COPY --from=base /app/build /usr/share/nginx/html
-
-# Copy custom nginx config and startup script from base stage
-COPY --from=base /app/nginx.conf /etc/nginx/conf.d/default.conf.template
-COPY --from=base /app/start-nginx.sh /start-nginx.sh
-RUN chmod +x /start-nginx.sh
-
-# Cloud Run expects the container to listen on $PORT
-EXPOSE $PORT
-
-CMD ["/start-nginx.sh"]
+FROM node:18-alpine AS prod
+WORKDIR /app
+COPY --from=base /app/build .
+RUN npm install -g serve
+EXPOSE 8080
+CMD ["serve", "-s", "."]
 
 # --- Development stage ---
 FROM node:18-alpine AS dev
