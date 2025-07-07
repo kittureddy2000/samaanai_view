@@ -367,12 +367,12 @@ def webauthn_authenticate_complete(request):
             credential_record.sign_count = verification.new_sign_count
             credential_record.last_used = timezone.now()
             credential_record.save()
-    
+            
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
-    
+            
             # Clear session
             if 'webauthn_challenge' in request.session:
                 del request.session['webauthn_challenge']

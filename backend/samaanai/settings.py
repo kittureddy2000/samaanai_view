@@ -371,6 +371,12 @@ SOCIAL_AUTH_ALLOWED_REDIRECT_URIS = [
     f'{FRONTEND_URL}/',
 ]
 
+# Add state handling configuration
+SOCIAL_AUTH_STATE_PARAMETER = True
+SOCIAL_AUTH_GOOGLE_OAUTH2_STATE_PARAMETER = True
+SOCIAL_AUTH_GOOGLE_OAUTH2_IGNORE_DEFAULT_SCOPE = True
+SOCIAL_AUTH_GOOGLE_OAUTH2_USE_UNIQUE_USER_ID = True
+
 # Validate Google OAuth credentials
 if not SOCIAL_AUTH_GOOGLE_OAUTH2_KEY:
     logger.warning("GOOGLE_CLIENT_ID is not set. Google OAuth will not work.")

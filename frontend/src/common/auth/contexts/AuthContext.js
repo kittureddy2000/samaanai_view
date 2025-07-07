@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
     }
     
     try {
-      const response = await api.get('/users/me/');
+      const response = await api.get('/api/users/me/');
       setCurrentUser(response.data);
       setLoading(false);
       return response.data;

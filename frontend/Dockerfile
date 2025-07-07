@@ -34,9 +34,9 @@ RUN if [ "$ENVIRONMENT" = "production" ]; then npm run build; fi
 FROM nginx:alpine AS prod
 COPY --from=base /app/build /usr/share/nginx/html
 
-# Copy custom nginx config and startup script
-COPY nginx.conf /etc/nginx/conf.d/default.conf.template
-COPY start-nginx.sh /start-nginx.sh
+# Copy custom nginx config and startup script from base stage
+COPY --from=base /app/nginx.conf /etc/nginx/conf.d/default.conf.template
+COPY --from=base /app/start-nginx.sh /start-nginx.sh
 RUN chmod +x /start-nginx.sh
 
 # Cloud Run expects the container to listen on $PORT

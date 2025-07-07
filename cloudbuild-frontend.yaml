@@ -8,11 +8,12 @@ steps:
 - id: "Build frontend image"
   name: 'gcr.io/cloud-builders/docker'
   args: ['build', 
+         '-f', 'frontend/Dockerfile',
          '-t', 'us-west1-docker.pkg.dev/$PROJECT_ID/samaanai-repo/${_FRONTEND_SERVICE_NAME}', 
          '--build-arg', 'ENVIRONMENT=production',
          '--build-arg', 'REACT_APP_API_URL=${_BACKEND_SERVICE_URL}/api',
          '--target', 'prod',
-         './frontend']
+         '.']
 
 # 2. Push the image
 - id: "Push frontend image"
