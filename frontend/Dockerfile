@@ -4,7 +4,7 @@ FROM node:18-alpine AS base
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm install
 
 # --- Debug: Check node_modules after install ---
@@ -13,10 +13,10 @@ RUN echo "--- Checking for notistack after install: ---" && ls -d /app/node_modu
 # --- End Debug ---
 
 # Copy public directory first to ensure it exists
-COPY public ./public
+COPY frontend/public ./public
 
 # Copy the rest of the project files
-COPY . .
+COPY frontend/. .
 COPY nginx.conf /app/nginx.conf
 COPY start-nginx.sh /app/start-nginx.sh
 
@@ -40,6 +40,7 @@ WORKDIR /app
 COPY --from=base /app/build .
 RUN npm install -g serve
 EXPOSE 8080
+# Cloud Run will set the PORT env variable, which 'serve' automatically uses.
 CMD ["serve", "-s", "."]
 
 # --- Development stage ---
