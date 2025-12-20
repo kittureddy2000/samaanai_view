@@ -79,7 +79,8 @@ class TransactionSerializer(serializers.ModelSerializer):
             'merchant_name', 'category', 'primary_category', 'detailed_category',
             'category_display', 'date', 'authorized_date', 'datetime',
             'payment_channel', 'transaction_type', 'location',
-            'pending', 'user_category', 'notes', 'created_at', 'updated_at'
+            'pending', 'user_category', 'notes', 'is_manual', 'exclude_from_reports',
+            'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'created_at', 'updated_at', 'plaid_transaction_id',

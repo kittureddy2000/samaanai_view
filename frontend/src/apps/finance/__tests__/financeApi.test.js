@@ -71,13 +71,13 @@ describe('Finance API Service', () => {
     });
   });
 
-  describe('API Clients', () => {
-    test('apiClient is exported', () => {
-      expect(api.apiClient).toBeDefined();
+  describe('Exports', () => {
+    test('default API client is exported', () => {
+      expect(api.default).toBeDefined();
     });
 
-    test('financeApiClient is exported', () => {
-      expect(api.financeApiClient).toBeDefined();
+    test('FINANCE_BASE_PATH constant is exported', () => {
+      expect(api.FINANCE_BASE_PATH).toBe('/api/finance');
     });
   });
 

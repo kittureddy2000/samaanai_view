@@ -8,6 +8,7 @@ from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from datetime import datetime, timedelta
 import logging
+import secrets
 import uuid
 from django.conf import settings
 
@@ -217,11 +218,66 @@ class InstitutionViewSet(viewsets.ModelViewSet):
             sync_service = TransactionSyncService()
             sync_service.sync_institution_transactions(institution)
             
+            # Also sync holdings if institution has investment accounts
+            from .services import InvestmentSyncService
+            investment_accounts = Account.objects.filter(
+                institution=institution,
+                type='investment'
+            )
+            
+            if investment_accounts.exists():
+                try:
+                    investment_service = InvestmentSyncService()
+                    investment_service.sync_institution_holdings(institution)
+                    
+                    # Sync investment transactions (last 1 year)
+                    start_date = (datetime.now() - timedelta(days=365)).date()
+                    end_date = datetime.now().date()
+                    investment_service.sync_institution_investment_transactions(
+                        institution, start_date, end_date
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not sync investment data: {e}")
+            
             return Response({"status": "success"})
         except Exception as e:
             logger.error(f"Error syncing transactions: {e}")
             return Response(
                 {"error": "Failed to sync transactions"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def sync_holdings(self, request, pk=None):
+        """Manually sync investment holdings for an institution"""
+        institution = self.get_object()
+        
+        try:
+            from .services import InvestmentSyncService
+            
+            investment_accounts = Account.objects.filter(
+                institution=institution,
+                type='investment'
+            )
+            
+            if not investment_accounts.exists():
+                return Response({"status": "no_investment_accounts"})
+            
+            investment_service = InvestmentSyncService()
+            investment_service.sync_institution_holdings(institution)
+            
+            # Also sync investment transactions (last 1 year)
+            start_date = (datetime.now() - timedelta(days=365)).date()
+            end_date = datetime.now().date()
+            investment_service.sync_institution_investment_transactions(
+                institution, start_date, end_date
+            )
+            
+            return Response({"status": "success"})
+        except Exception as e:
+            logger.error(f"Error syncing holdings: {e}")
+            return Response(
+                {"error": f"Failed to sync holdings: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -284,6 +340,43 @@ class InstitutionViewSet(viewsets.ModelViewSet):
             logger.error(f"Error creating investment upgrade link token: {e}")
             return Response(
                 {"error": "Failed to create upgrade link token"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def create_update_link_token(self, request, pk=None):
+        """Create a link token for updating/reconnecting an institution that needs re-authentication"""
+        institution = self.get_object()
+        
+        try:
+            plaid_service = PlaidService()
+            
+            # Create link token in update mode using the existing access token
+            from plaid.model.link_token_create_request import LinkTokenCreateRequest
+            from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
+            from plaid.model.country_code import CountryCode
+            
+            link_request = LinkTokenCreateRequest(
+                user=LinkTokenCreateRequestUser(client_user_id=str(request.user.id)),
+                client_name="Samaanai Finance",
+                country_codes=[CountryCode('US')],
+                language="en",
+                access_token=institution.access_token,  # This puts Link in update mode
+            )
+            
+            response = plaid_service.client.link_token_create(link_request)
+            
+            return Response({
+                "link_token": response['link_token'],
+                "expiration": response['expiration'],
+                "institution_id": str(institution.id),
+                "institution_name": institution.name,
+                "message": "Use this link token to reconnect your account"
+            })
+        except Exception as e:
+            logger.error(f"Error creating update link token for institution {institution.name}: {e}")
+            return Response(
+                {"error": "Failed to create update link token"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -417,6 +510,69 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
         transaction.save()
         
         return Response({"notes": transaction.notes})
+    
+    @action(detail=False, methods=['post'])
+    def create_manual(self, request):
+        """Create a manual transaction (not from Plaid)"""
+        try:
+            account_id = request.data.get('account_id')
+            if not account_id:
+                return Response(
+                    {"error": "account_id is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify user owns the account
+            try:
+                account = Account.objects.get(
+                    id=account_id,
+                    institution__user=request.user
+                )
+            except Account.DoesNotExist:
+                return Response(
+                    {"error": "Account not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Create the transaction
+            transaction = Transaction.objects.create(
+                account=account,
+                plaid_transaction_id=f"manual_{uuid.uuid4()}",  # Unique ID for manual transactions
+                amount=float(request.data.get('amount', 0)),
+                name=request.data.get('description', 'Manual Transaction'),
+                merchant_name=request.data.get('merchant_name', request.data.get('description', '')),
+                date=request.data.get('date', timezone.now().date()),
+                primary_category=request.data.get('category', 'OTHER'),
+                user_category=request.data.get('user_category', ''),
+                notes=request.data.get('notes', ''),
+                is_manual=True,  # Flag for manual transactions
+                pending=False
+            )
+            
+            serializer = TransactionSerializer(transaction)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error creating manual transaction: {e}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['patch'])
+    def toggle_exclude_from_reports(self, request, pk=None):
+        """Toggle whether a transaction is excluded from reports"""
+        transaction = self.get_object()
+        # Toggle the value or set explicitly if provided
+        if 'exclude' in request.data:
+            transaction.exclude_from_reports = request.data.get('exclude', False)
+        else:
+            transaction.exclude_from_reports = not transaction.exclude_from_reports
+        transaction.save()
+        
+        return Response({
+            "exclude_from_reports": transaction.exclude_from_reports
+        })
 
 
 class SpendingCategoryViewSet(viewsets.ModelViewSet):
@@ -624,13 +780,28 @@ class NetWorthTrendView(views.APIView):
 
 class PlaidWebhookView(views.APIView):
     """Handle Plaid webhooks"""
-    permission_classes = []  # No auth for webhooks
-    
+    authentication_classes = []
+    permission_classes = []  # Explicitly allow unauthenticated webhooks with additional secret validation
+
+    def _valid_secret(self, request) -> bool:
+        expected = getattr(settings, 'PLAID_WEBHOOK_SECRET', None)
+        if not expected:
+            # When no secret is configured we allow the request (e.g., sandbox environments)
+            return True
+        provided = request.query_params.get('secret') or request.headers.get('X-Plaid-Webhook-Secret')
+        if not provided:
+            return False
+        return secrets.compare_digest(str(provided), str(expected))
+
     def post(self, request):
+        if not self._valid_secret(request):
+            logger.warning("Rejected Plaid webhook due to invalid secret")
+            return Response({"error": "Invalid webhook signature"}, status=status.HTTP_403_FORBIDDEN)
+
         webhook_type = request.data.get('webhook_type')
         webhook_code = request.data.get('webhook_code')
         item_id = request.data.get('item_id')
-        
+
         # Save webhook for processing
         webhook = PlaidWebhook.objects.create(
             webhook_type=webhook_type,
@@ -638,38 +809,366 @@ class PlaidWebhookView(views.APIView):
             item_id=item_id,
             payload=request.data,
         )
-        
-        # Process webhook asynchronously (using Celery in production)
-        # For now, process synchronously
+
         try:
             if webhook_type == 'TRANSACTIONS':
                 if webhook_code in ['INITIAL_UPDATE', 'DEFAULT_UPDATE']:
-                    # Sync transactions for the institution
-                    institution = Institution.objects.get(item_id=item_id)
-                    sync_service = TransactionSyncService()
-                    sync_service.sync_institution_transactions(institution)
+                    try:
+                        institution = Institution.objects.get(item_id=item_id)
+                    except Institution.DoesNotExist:
+                        logger.warning("Plaid webhook received for unknown item_id %s", item_id)
+                    else:
+                        sync_service = TransactionSyncService()
+                        sync_service.sync_institution_transactions(institution)
                 elif webhook_code == 'TRANSACTIONS_REMOVED':
-                    # Handle removed transactions
                     removed_ids = request.data.get('removed_transactions', [])
-                    Transaction.objects.filter(
-                        plaid_transaction_id__in=removed_ids
-                    ).delete()
-            
-            elif webhook_type == 'ITEM':
-                if webhook_code == 'ERROR':
-                    # Mark institution as needing update
-                    Institution.objects.filter(item_id=item_id).update(
-                        needs_update=True,
-                        error_message=str(request.data.get('error'))
-                    )
-            
+                    if removed_ids and item_id:
+                        Transaction.objects.filter(
+                            account__institution__item_id=item_id,
+                            plaid_transaction_id__in=removed_ids
+                        ).delete()
+
+            elif webhook_type == 'ITEM' and webhook_code == 'ERROR' and item_id:
+                Institution.objects.filter(item_id=item_id).update(
+                    needs_update=True,
+                    error_message=str(request.data.get('error'))
+                )
+
             webhook.processed = True
             webhook.processed_at = timezone.now()
-            webhook.save()
-            
+            webhook.save(update_fields=['processed', 'processed_at'])
+
         except Exception as e:
             logger.error(f"Error processing webhook: {e}")
             webhook.error = str(e)
-            webhook.save()
-        
+            webhook.save(update_fields=['error'])
+
         return Response({"status": "received"})
+
+
+class CSVImportView(views.APIView):
+    """Import transactions and holdings from CSV files (for Fidelity and other unsupported institutions)"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        import csv
+        import io
+        from decimal import Decimal, InvalidOperation
+        from dateutil import parser as date_parser
+        
+        csv_file = request.FILES.get('file')
+        import_type = request.data.get('type', 'auto')  # 'transactions', 'holdings', or 'auto'
+        institution_name = request.data.get('institution_name', 'Fidelity')
+        
+        if not csv_file:
+            return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Read CSV content
+            decoded_file = csv_file.read().decode('utf-8-sig')  # utf-8-sig handles BOM
+            reader = csv.DictReader(io.StringIO(decoded_file))
+            rows = list(reader)
+            
+            if not rows:
+                return Response({"error": "CSV file is empty"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Detect file type based on columns
+            columns = set(rows[0].keys()) if rows else set()
+            columns_lower = {c.lower().strip() for c in columns}
+            
+            is_holdings = any(col in columns_lower for col in ['current value', 'cost basis', 'last price', 'current_value'])
+            is_transactions = any(col in columns_lower for col in ['action', 'run date', 'settlement date', 'trade date'])
+            
+            if import_type == 'auto':
+                import_type = 'holdings' if is_holdings else 'transactions'
+            
+            # Get or create manual institution for this user
+            institution, inst_created = Institution.objects.get_or_create(
+                user=request.user,
+                plaid_institution_id=f"manual_{institution_name.lower().replace(' ', '_')}",
+                defaults={
+                    'name': institution_name,
+                    'access_token': 'manual_import',
+                    'item_id': f"manual_{request.user.id}_{institution_name.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}",
+                    'is_active': True,
+                }
+            )
+            
+            result = {
+                'institution': institution.name,
+                'institution_created': inst_created,
+                'import_type': import_type,
+                'accounts_created': 0,
+                'accounts_updated': 0,
+                'transactions_created': 0,
+                'transactions_updated': 0,
+                'holdings_created': 0,
+                'holdings_updated': 0,
+                'errors': []
+            }
+            
+            if import_type == 'holdings':
+                result = self._import_fidelity_holdings(request.user, institution, rows, result)
+            else:
+                result = self._import_fidelity_transactions(request.user, institution, rows, result)
+            
+            return Response(result)
+            
+        except Exception as e:
+            logger.error(f"Error importing CSV: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _import_fidelity_holdings(self, user, institution, rows, result):
+        """Import Fidelity holdings CSV"""
+        from decimal import Decimal, InvalidOperation
+        from .models import Account, Security, Holding
+        
+        accounts_cache = {}
+        
+        for row_num, row in enumerate(rows, start=2):
+            try:
+                # Normalize column names (Fidelity uses various naming conventions)
+                row_lower = {k.lower().strip(): v.strip() if v else '' for k, v in row.items()}
+                
+                # Extract account info
+                account_number = row_lower.get('account number', row_lower.get('account', '')).strip()
+                account_name = row_lower.get('account name', row_lower.get('account type', f'Fidelity Account')).strip()
+                
+                if not account_number:
+                    # Try to extract from first column
+                    first_val = list(row.values())[0] if row else ''
+                    if first_val and first_val.replace('-', '').isdigit():
+                        account_number = first_val
+                    else:
+                        continue  # Skip rows without account number
+                
+                # Get or create account
+                if account_number not in accounts_cache:
+                    account, acc_created = Account.objects.get_or_create(
+                        plaid_account_id=f"manual_{account_number}",
+                        defaults={
+                            'institution': institution,
+                            'name': account_name or f"Fidelity {account_number[-4:]}",
+                            'official_name': account_name,
+                            'mask': account_number[-4:] if len(account_number) >= 4 else account_number,
+                            'type': 'investment',
+                            'subtype': 'brokerage',
+                            'current_balance': 0,
+                            'is_active': True,
+                            'is_selected': True,
+                        }
+                    )
+                    # Update institution if account exists but was orphaned
+                    if not acc_created and account.institution_id != institution.id:
+                        account.institution = institution
+                        account.save()
+                    
+                    accounts_cache[account_number] = account
+                    if acc_created:
+                        result['accounts_created'] += 1
+                    else:
+                        result['accounts_updated'] += 1
+                
+                account = accounts_cache[account_number]
+                
+                # Extract holding data
+                symbol = row_lower.get('symbol', row_lower.get('ticker', '')).strip()
+                description = row_lower.get('description', row_lower.get('security description', row_lower.get('name', ''))).strip()
+                
+                # Skip cash or empty rows
+                if not symbol or symbol in ['--', 'N/A', 'Pending Activity'] or 'CASH' in symbol.upper():
+                    continue
+                
+                # Parse numeric values (Fidelity uses $ and comma formatting)
+                def parse_money(val):
+                    if not val or val in ['--', 'N/A', '$--']:
+                        return None
+                    try:
+                        clean = val.replace('$', '').replace(',', '').replace('(', '-').replace(')', '').strip()
+                        return Decimal(clean) if clean else None
+                    except (InvalidOperation, ValueError):
+                        return None
+                
+                def parse_quantity(val):
+                    if not val or val in ['--', 'N/A']:
+                        return Decimal('0')
+                    try:
+                        clean = val.replace(',', '').strip()
+                        return Decimal(clean) if clean else Decimal('0')
+                    except (InvalidOperation, ValueError):
+                        return Decimal('0')
+                
+                quantity = parse_quantity(row_lower.get('quantity', row_lower.get('shares', '0')))
+                last_price = parse_money(row_lower.get('last price', row_lower.get('price', '')))
+                current_value = parse_money(row_lower.get('current value', row_lower.get('value', '')))
+                cost_basis = parse_money(row_lower.get('cost basis total', row_lower.get('cost basis', row_lower.get('cost basis per share', ''))))
+                
+                if quantity == 0 and not current_value:
+                    continue  # Skip empty holdings
+                
+                # Get or create security
+                security, _ = Security.objects.update_or_create(
+                    plaid_security_id=f"manual_{symbol}",
+                    defaults={
+                        'name': description or symbol,
+                        'ticker_symbol': symbol,
+                        'type': 'equity',
+                        'close_price': last_price,
+                        'close_price_as_of': timezone.now().date(),
+                        'is_cash_equivalent': 'MONEY MARKET' in description.upper() if description else False,
+                    }
+                )
+                
+                # Create or update holding
+                holding, h_created = Holding.objects.update_or_create(
+                    account=account,
+                    security=security,
+                    defaults={
+                        'quantity': quantity,
+                        'institution_price': last_price or Decimal('0'),
+                        'institution_price_as_of': timezone.now().date(),
+                        'institution_value': current_value or (quantity * (last_price or Decimal('0'))),
+                        'cost_basis': cost_basis,
+                        'iso_currency_code': 'USD',
+                    }
+                )
+                
+                if h_created:
+                    result['holdings_created'] += 1
+                else:
+                    result['holdings_updated'] += 1
+                    
+            except Exception as e:
+                result['errors'].append(f"Row {row_num}: {str(e)}")
+        
+        # Update account balances
+        for account in accounts_cache.values():
+            total = Holding.objects.filter(account=account).aggregate(
+                total=Sum('institution_value')
+            )['total'] or Decimal('0')
+            account.current_balance = total
+            account.save()
+        
+        return result
+    
+    def _import_fidelity_transactions(self, user, institution, rows, result):
+        """Import Fidelity transactions CSV"""
+        from decimal import Decimal, InvalidOperation
+        from dateutil import parser as date_parser
+        from .models import Account, Transaction
+        
+        accounts_cache = {}
+        
+        for row_num, row in enumerate(rows, start=2):
+            try:
+                # Normalize column names
+                row_lower = {k.lower().strip(): v.strip() if v else '' for k, v in row.items()}
+                
+                # Extract account info
+                account_number = row_lower.get('account number', row_lower.get('account', '')).strip()
+                
+                if not account_number:
+                    # Try first column
+                    first_val = list(row.values())[0] if row else ''
+                    if first_val and first_val.replace('-', '').isdigit():
+                        account_number = first_val
+                    else:
+                        continue
+                
+                # Get or create account
+                if account_number not in accounts_cache:
+                    account, acc_created = Account.objects.get_or_create(
+                        plaid_account_id=f"manual_{account_number}",
+                        defaults={
+                            'institution': institution,
+                            'name': f"Fidelity {account_number[-4:]}",
+                            'mask': account_number[-4:] if len(account_number) >= 4 else account_number,
+                            'type': 'investment',
+                            'subtype': 'brokerage',
+                            'current_balance': 0,
+                            'is_active': True,
+                            'is_selected': True,
+                        }
+                    )
+                    if not acc_created and account.institution_id != institution.id:
+                        account.institution = institution
+                        account.save()
+                    
+                    accounts_cache[account_number] = account
+                    if acc_created:
+                        result['accounts_created'] += 1
+                
+                account = accounts_cache[account_number]
+                
+                # Extract transaction data
+                date_str = row_lower.get('date', row_lower.get('run date', row_lower.get('trade date', '')))
+                if not date_str or date_str in ['--', 'N/A']:
+                    continue
+                
+                try:
+                    tx_date = date_parser.parse(date_str).date()
+                except:
+                    continue
+                
+                action = row_lower.get('action', row_lower.get('type', row_lower.get('transaction type', ''))).strip()
+                symbol = row_lower.get('symbol', row_lower.get('ticker', '')).strip()
+                description = row_lower.get('description', row_lower.get('security description', '')).strip()
+                
+                def parse_money(val):
+                    if not val or val in ['--', 'N/A', '$--']:
+                        return Decimal('0')
+                    try:
+                        clean = val.replace('$', '').replace(',', '').replace('(', '-').replace(')', '').strip()
+                        return Decimal(clean) if clean else Decimal('0')
+                    except (InvalidOperation, ValueError):
+                        return Decimal('0')
+                
+                amount = parse_money(row_lower.get('amount', row_lower.get('net amount', '0')))
+                quantity = parse_money(row_lower.get('quantity', row_lower.get('shares', '0')))
+                price = parse_money(row_lower.get('price', '0'))
+                
+                # Determine category based on action
+                action_upper = action.upper() if action else ''
+                if 'BUY' in action_upper or 'PURCHASE' in action_upper:
+                    category = 'INVESTMENT_BUY'
+                elif 'SELL' in action_upper or 'SOLD' in action_upper:
+                    category = 'INVESTMENT_SELL'
+                elif 'DIVIDEND' in action_upper or 'DIV' in action_upper:
+                    category = 'DIVIDEND'
+                elif 'INTEREST' in action_upper:
+                    category = 'INTEREST'
+                elif 'TRANSFER' in action_upper:
+                    category = 'TRANSFER'
+                elif 'FEE' in action_upper:
+                    category = 'BANK_FEES'
+                else:
+                    category = 'OTHER'
+                
+                # Create unique transaction ID
+                tx_id = f"manual_{account_number}_{tx_date}_{symbol or 'cash'}_{abs(amount)}"
+                
+                tx, tx_created = Transaction.objects.update_or_create(
+                    plaid_transaction_id=tx_id,
+                    defaults={
+                        'account': account,
+                        'amount': abs(amount) if 'BUY' in action_upper or 'PURCHASE' in action_upper or amount > 0 else -abs(amount),
+                        'iso_currency_code': 'USD',
+                        'name': description or action or 'Transaction',
+                        'merchant_name': 'Fidelity',
+                        'primary_category': category,
+                        'date': tx_date,
+                        'pending': False,
+                        'is_manual': True,
+                    }
+                )
+                
+                if tx_created:
+                    result['transactions_created'] += 1
+                else:
+                    result['transactions_updated'] += 1
+                    
+            except Exception as e:
+                result['errors'].append(f"Row {row_num}: {str(e)}")
+        
+        return result
+

@@ -16,6 +16,8 @@ from datetime import timedelta
 import dj_database_url
 from urllib.parse import urlparse
 from decouple import config
+import base64
+import hashlib
 
 # --- Setup logger ---
 logger = logging.getLogger(__name__)
@@ -71,6 +73,7 @@ ENVIRONMENT = env('ENVIRONMENT', default='development')
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('SECRET_KEY', default=None)
 DB_PASSWORD = env('DB_PASSWORD', default=None)
+GS_CREDENTIALS = None
 
 if ENVIRONMENT.lower() in ['development', 'test']:
     DEBUG = env.bool('DEBUG', default=True)
@@ -154,6 +157,24 @@ if not DB_PASSWORD:
      logger.warning("DB_PASSWORD is not set. Database connection might fail.")
 
 
+# --- Plaid security configuration ---
+PLAID_ENCRYPTION_KEY = env('PLAID_ENCRYPTION_KEY', default=None)
+if not PLAID_ENCRYPTION_KEY:
+    if ENVIRONMENT.lower() in ['development', 'test']:
+        derived_key = base64.urlsafe_b64encode(
+            hashlib.sha256((SECRET_KEY or 'samaanai-dev').encode()).digest()
+        ).decode()
+        PLAID_ENCRYPTION_KEY = derived_key
+        logger.warning(
+            "PLAID_ENCRYPTION_KEY not set; deriving a development-only key from SECRET_KEY."
+        )
+    else:
+        logger.error("PLAID_ENCRYPTION_KEY must be configured in production.")
+        raise ValueError("PLAID_ENCRYPTION_KEY must be configured in production.")
+
+PLAID_WEBHOOK_SECRET = env('PLAID_WEBHOOK_SECRET', default=None)
+
+
 # --- General Django Settings ---
 
 # Application definition
@@ -172,7 +193,6 @@ INSTALLED_APPS = [
     'storages', # For GCS
     # Local apps (Calorie Tracker)
     'apps.users.apps.UsersConfig',
-    'apps.nutrition.apps.NutritionConfig',
     'apps.finance.apps.FinanceConfig',
     'apps.notifications',  # Add notifications app
     'social_django',
@@ -180,6 +200,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # Add Whitenoise
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.common.CommonMiddleware',
@@ -218,6 +239,8 @@ DATABASES = {
         'PASSWORD': DB_PASSWORD if ENVIRONMENT == 'production' else env('POSTGRES_PASSWORD', default='testpass123'),
         'HOST': env('DB_HOST', default='db'),
         'PORT': env('DB_PORT', default='5432'),
+        'CONN_MAX_AGE': 600, # 10 minutes connection pooling
+        'CONN_HEALTH_CHECKS': True,
     }
 }
 
@@ -284,6 +307,10 @@ STATICFILES_FINDERS = [
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+# Whitenoise storage for static files
+if not GS_CREDENTIALS:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 # Logging Configuration
 LOGGING = {

@@ -15,6 +15,7 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
 import logging
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from plaid.exceptions import ApiException
 
 logger = logging.getLogger(__name__)
@@ -29,9 +30,18 @@ class PlaidService:
             secret_key = settings.PLAID_SECRET_PRODUCTION
         else:
             secret_key = settings.PLAID_SECRET_SANDBOX
+        
+        # Map environment names to Plaid Environment attributes
+        # Note: 'development' in Plaid uses the same host as 'sandbox' but connects to real banks
+        env_mapping = {
+            'sandbox': 'Sandbox',
+            'development': 'Sandbox',  # Development uses sandbox host but real bank connections
+            'production': 'Production'
+        }
+        plaid_env = env_mapping.get(settings.PLAID_ENV.lower(), 'Sandbox')
             
         configuration = plaid.Configuration(
-            host=getattr(plaid.Environment, settings.PLAID_ENV.capitalize()),
+            host=getattr(plaid.Environment, plaid_env),
             api_key={
                 'clientId': settings.PLAID_CLIENT_ID,
                 'secret': secret_key,
@@ -75,9 +85,17 @@ class PlaidService:
             if redirect_uri:
                 link_token_args['redirect_uri'] = redirect_uri
             
-            if hasattr(settings, 'PLAID_WEBHOOK_URL') and settings.PLAID_WEBHOOK_URL:
-                link_token_args['webhook'] = settings.PLAID_WEBHOOK_URL
-                logger.info(f"Setting webhook URL for Plaid Link: {settings.PLAID_WEBHOOK_URL}")
+            webhook_url = getattr(settings, 'PLAID_WEBHOOK_URL', None)
+            if webhook_url:
+                if getattr(settings, 'PLAID_WEBHOOK_SECRET', None):
+                    parsed = urlparse(webhook_url)
+                    query = parse_qs(parsed.query, keep_blank_values=True)
+                    query['secret'] = [settings.PLAID_WEBHOOK_SECRET]
+                    webhook_url = urlunparse(
+                        parsed._replace(query=urlencode(query, doseq=True))
+                    )
+                link_token_args['webhook'] = webhook_url
+                logger.info(f"Setting webhook URL for Plaid Link: {webhook_url}")
             else:
                 logger.warning("PLAID_WEBHOOK_URL is not set in Django settings. Webhooks will not be configured for Plaid Link.")
 
@@ -399,6 +417,16 @@ class TransactionSyncService:
                     logger.warning("Plaid mutation during pagination – restarting sync from saved cursor")
                     # Reset cursor to institution.sync_cursor (may be None) and retry once
                     cursor = institution.sync_cursor if hasattr(institution, 'sync_cursor') else None
+                    has_more = True
+                    continue
+                # Handle stale cursor error - reset cursor and restart from beginning
+                elif "cursor not associated with access_token" in str(e.body) or "INVALID_FIELD" in str(e.body):
+                    logger.warning(f"Cursor not associated with access_token for institution {institution.id} - resetting cursor and retrying")
+                    # Clear the stale cursor
+                    if hasattr(institution, 'sync_cursor'):
+                        institution.sync_cursor = None
+                        institution.save()
+                    cursor = None
                     has_more = True
                     continue
                 else:

@@ -1,153 +1,177 @@
-import { api } from '../../../common/auth';
-import axios from 'axios';
+import api from '../../../common/auth/services/api';
 
-// Main shared API instance (handles auth + token refresh)
-const apiClient = api;
-const financeApiClient = axios.create({
-  baseURL: api.defaults.baseURL,
-});
+export const FINANCE_BASE_PATH = '/api/finance';
+const withBase = (path = '') => `${FINANCE_BASE_PATH}${path}`;
 
-// Base path for finance API endpoints
-const BASE_PATH = '/api/finance';
-
-// Ensure every finance request path includes the BASE_PATH
-financeApiClient.interceptors.request.use(config => {
-  if (config.url && !config.url.startsWith(BASE_PATH)) {
-    // Avoid double slashes
-    if (!config.url.startsWith('/')) {
-      config.url = `/${config.url}`;
-    }
-    config.url = `${BASE_PATH}${config.url}`;
+const handleError = (error, fallbackMessage) => {
+  console.error(fallbackMessage, error.response?.data || error.message);
+  if (error.code === 'ECONNREFUSED') {
+    throw new Error('Unable to connect to the backend server. Please ensure Django is running on port 8000.');
   }
-  return config;
-});
+  throw error.response?.data || new Error(fallbackMessage);
+};
 
-// Add simple connection error logging for finance calls
-financeApiClient.interceptors.response.use(response => response, error => Promise.reject(error));
-
-/**
- * Fetches dashboard data.
- */
 export const getDashboardData = async (params = {}) => {
-    try {
-        const response = await financeApiClient.get(`${BASE_PATH}/dashboard/`, { params });
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching dashboard data:', error.response?.data || error.message);
-        
-        // Provide more specific error messages
-        if (error.code === 'ECONNREFUSED') {
-            throw new Error('Unable to connect to the backend server. Please ensure Django is running on port 8000.');
-        }
-        
-        throw error.response?.data || new Error('Failed to fetch dashboard data');
-    }
+  try {
+    const response = await api.get(withBase('/dashboard/'), { params });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Failed to fetch dashboard data');
+  }
 };
 
-// Add other finance-related API functions
 export const getInstitutions = async () => {
-    try {
-        const response = await financeApiClient.get(`${BASE_PATH}/institutions/`);
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching institutions:', error);
-        throw error;
-    }
+  try {
+    const response = await api.get(withBase('/institutions/'));
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error fetching institutions');
+  }
 };
 
-export const createLinkToken = async () => {
-    const response = await financeApiClient.post(`${BASE_PATH}/plaid/create-link-token/`);
-    return response.data;
+export const createLinkToken = async (includeInvestments = true) => {
+  const response = await api.post(withBase('/plaid/create-link-token/'), {
+    include_investments: includeInvestments,
+  });
+  return response.data;
 };
 
-export const exchangePublicToken = async (publicToken, institutionId, institutionName, accounts) => {
-    const response = await financeApiClient.post(`${BASE_PATH}/plaid/exchange-public-token/`, {
-        public_token: publicToken,
-        institution_id: institutionId,
-        institution_name: institutionName,
-        accounts,
-    });
-    return response.data;
+export const exchangePublicToken = async (publicToken, institutionId, institutionName, accounts = []) => {
+  const payload = {
+    public_token: publicToken,
+    institution_id: institutionId,
+    institution_name: institutionName,
+    accounts,
+  };
+  const response = await api.post(withBase('/plaid/exchange-public-token/'), payload);
+  return response.data;
 };
 
 export const getAccounts = async () => {
-    try {
-        const response = await financeApiClient.get(`${BASE_PATH}/accounts/`);
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching accounts:', error);
-        throw error;
-    }
+  try {
+    const response = await api.get(withBase('/accounts/'));
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error fetching accounts');
+  }
 };
 
 export const getSpendingCategories = async () => {
-    try {
-        const response = await financeApiClient.get(`${BASE_PATH}/spending-categories/`);
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching categories:', error);
-        throw error;
-    }
+  try {
+    const response = await api.get(withBase('/spending-categories/'));
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error fetching categories');
+  }
 };
 
 export const refreshAccountBalances = async () => {
-    try {
-        // Get all institutions first
-        const institutionsResponse = await getInstitutions();
-        const institutions = institutionsResponse.results || institutionsResponse;
-        
-        // Update balances for each institution
-        const refreshPromises = institutions.map(institution => 
-            financeApiClient.post(`${BASE_PATH}/institutions/${institution.id}/update_balances/`)
-        );
-        
-        await Promise.all(refreshPromises);
-        
-        // Return updated institutions and flatten accounts like the main app expects
-        const freshInstitutionsResponse = await getInstitutions();
-        const freshInstitutions = freshInstitutionsResponse.results || freshInstitutionsResponse;
-        const allAccounts = freshInstitutions.flatMap(inst =>
-            (inst.accounts || []).map(acc => ({ ...acc, institution: inst }))
-        );
-        
-        return allAccounts;
-    } catch (error) {
-        console.error('Error refreshing account balances:', error);
-        throw error;
-    }
+  try {
+    const institutionsResponse = await getInstitutions();
+    const institutions = institutionsResponse.results || institutionsResponse;
+
+    await Promise.all(
+      institutions.map(institution =>
+        api.post(withBase(`/institutions/${institution.id}/update_balances/`))
+      )
+    );
+
+    const freshInstitutionsResponse = await getInstitutions();
+    const freshInstitutions = freshInstitutionsResponse.results || freshInstitutionsResponse;
+    return freshInstitutions.flatMap(inst =>
+      (inst.accounts || []).map(acc => ({ ...acc, institution: inst }))
+    );
+  } catch (error) {
+    handleError(error, 'Error refreshing account balances');
+  }
 };
 
-// Investment API functions
 export const getHoldings = async (params = {}) => {
-    try {
-        const response = await financeApiClient.get(`${BASE_PATH}/holdings/`, { params });
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching holdings:', error);
-        throw error;
-    }
+  try {
+    const response = await api.get(withBase('/holdings/'), { params });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error fetching holdings');
+  }
 };
 
 export const getInvestmentTransactions = async (params = {}) => {
-    try {
-        const response = await financeApiClient.get(`${BASE_PATH}/investment-transactions/`, { params });
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching investment transactions:', error);
-        throw error;
-    }
+  try {
+    const response = await api.get(withBase('/investment-transactions/'), { params });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error fetching investment transactions');
+  }
 };
 
 export const upgradeInstitutionForInvestments = async (institutionId) => {
-    try {
-        const response = await financeApiClient.post(`${BASE_PATH}/institutions/${institutionId}/upgrade_for_investments/`);
-        return response.data;
-    } catch (error) {
-        console.error('Error upgrading institution for investments:', error);
-        throw error;
-    }
+  try {
+    const response = await api.post(withBase(`/institutions/${institutionId}/upgrade_for_investments/`));
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error upgrading institution for investments');
+  }
 };
 
-// Export apiClient both as named and default export
-export { apiClient, financeApiClient };
-export default apiClient;
+// Get transactions with optional filtering
+export const getTransactions = async (params = {}) => {
+  try {
+    const response = await api.get(withBase('/transactions/'), { params });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error fetching transactions');
+  }
+};
+
+// Manually sync transactions for an institution
+export const syncInstitutionTransactions = async (institutionId) => {
+  try {
+    const response = await api.post(withBase(`/institutions/${institutionId}/sync_transactions/`));
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error syncing transactions');
+  }
+};
+
+// Create a link token for updating/reconnecting an institution
+export const createUpdateLinkToken = async (institutionId) => {
+  try {
+    const response = await api.post(withBase(`/institutions/${institutionId}/create_update_link_token/`));
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error creating update link token');
+  }
+};
+
+// Delete/unlink an institution
+export const deleteInstitution = async (institutionId) => {
+  try {
+    const response = await api.delete(withBase(`/institutions/${institutionId}/`));
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error removing institution');
+  }
+};
+
+// Create a manual transaction
+export const createTransaction = async (transactionData) => {
+  try {
+    const response = await api.post(withBase('/transactions/create_manual/'), transactionData);
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error creating transaction');
+  }
+};
+
+// Toggle exclude from reports for a transaction
+export const toggleExcludeFromReports = async (transactionId, exclude = null) => {
+  try {
+    const data = exclude !== null ? { exclude } : {};
+    const response = await api.patch(withBase(`/transactions/${transactionId}/toggle_exclude_from_reports/`), data);
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error updating transaction');
+  }
+};
+
+export default api;

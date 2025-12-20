@@ -5,6 +5,8 @@ from django.utils import timezone
 from decimal import Decimal
 import uuid
 
+from .fields import EncryptedTextField
+
 class Institution(models.Model):
     """Financial institution linked via Plaid"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -16,7 +18,7 @@ class Institution(models.Model):
     url = models.URLField(blank=True, null=True)
     
     # Plaid connection data
-    access_token = models.TextField()  # Encrypted in production
+    access_token = EncryptedTextField()
     item_id = models.CharField(max_length=100, unique=True)
     sync_cursor = models.TextField(blank=True, null=True)  # Plaid transaction sync cursor
     
@@ -189,6 +191,8 @@ class Transaction(models.Model):
     # User modifications
     user_category = models.CharField(max_length=100, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    is_manual = models.BooleanField(default=False)  # True if manually created by user
+    exclude_from_reports = models.BooleanField(default=False)  # Exclude from analytics/reports
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)

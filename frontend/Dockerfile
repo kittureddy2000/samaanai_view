@@ -4,7 +4,7 @@ FROM node:18-alpine AS base
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY frontend/package*.json ./
+COPY package*.json ./
 RUN npm install
 
 # --- Debug: Check node_modules after install ---
@@ -13,10 +13,10 @@ RUN echo "--- Checking for notistack after install: ---" && ls -d /app/node_modu
 # --- End Debug ---
 
 # Copy public directory first to ensure it exists
-COPY frontend/public ./public
+COPY public ./public
 
 # Copy the rest of the project files
-COPY frontend/. .
+COPY . .
 COPY nginx.conf /app/nginx.conf
 COPY start-nginx.sh /app/start-nginx.sh
 
@@ -29,9 +29,9 @@ RUN echo "--- Checking for notistack after COPY . .: ---" && ls -d /app/node_mod
 
 # Build for production if needed
 ARG ENVIRONMENT=production
-ARG REACT_APP_API_URL
+ARG VITE_API_URL
 ENV ENVIRONMENT=${ENVIRONMENT}
-ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ENV VITE_API_URL=${VITE_API_URL}
 RUN if [ "$ENVIRONMENT" = "production" ]; then npm run build; fi
 
 # --- Production stage ---

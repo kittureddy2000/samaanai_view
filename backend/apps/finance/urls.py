@@ -12,7 +12,8 @@ from .views import (
     DashboardView,
     MonthlySpendingView,
     NetWorthTrendView,
-    PlaidWebhookView
+    PlaidWebhookView,
+    CSVImportView
 )
 
 router = DefaultRouter()
@@ -31,4 +32,5 @@ urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('reports/monthly-spending/', MonthlySpendingView.as_view(), name='monthly-spending'),
     path('reports/net-worth-trend/', NetWorthTrendView.as_view(), name='net-worth-trend'),
+    path('import/csv/', CSVImportView.as_view(), name='csv-import'),
 ] 

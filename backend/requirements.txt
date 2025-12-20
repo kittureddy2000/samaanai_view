@@ -1,3 +1,4 @@
+whitenoise>=6.6.0
 Django>=4.0,<5.0
 djangorestframework>=3.12
 django-cors-headers>=3.7
@@ -29,3 +30,4 @@ sendgrid>=6.10.0
 django-sendgrid-v5>=1.2.0
 # WebAuthn dependencies
 webauthn>=1.11.0
+cryptography>=41.0.0

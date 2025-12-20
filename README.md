@@ -17,6 +17,12 @@ A comprehensive personal finance and nutrition tracking application built with D
 - **Calorie Counting**: Monitor daily caloric consumption
 - **Nutritional Analysis**: Detailed breakdown of macros and nutrients
 
+## Environment Layout
+
+- **Local Development**: Use `docker-compose.yml` with `.env`
+- **Staging**: Dedicated GCP project (see `STAGING-SETUP.md`)
+- **Production**: Current production project with Cloud Run + Cloud Build triggers
+
 ## Development Setup
 
 ### Prerequisites
@@ -27,16 +33,29 @@ A comprehensive personal finance and nutrition tracking application built with D
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd Samaanai_view
+cd samaanai_view
 
 # Copy environment template
-cp .env.example .env
+cp env.template .env
 
 # Edit .env with your configuration
 nano .env
 
 # Start development servers
 docker-compose up --build
+
+# OR Run manually without Docker
+# Backend
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python manage.py runserver
+
+# Frontend (Vite)
+cd frontend
+npm install
+npm start # runs on localhost:3000
 ```
 
 ### HTTPS Development Setup (Required for Chase OAuth)
@@ -51,7 +70,7 @@ For testing OAuth institutions like Chase Bank, you need HTTPS:
 ./scripts/dev-https.sh
 
 # Or manually:
-docker-compose -f docker-compose.yml -f docker-compose.https.yml up --build
+docker-compose -f docker-compose.yml -f infrastructure/archive/docker-compose.https.yml up --build
 ```
 
 **Access Points:**
@@ -82,6 +101,8 @@ PLAID_SECRET_SANDBOX=your_plaid_sandbox_secret
 PLAID_SECRET_PRODUCTION=your_plaid_production_secret
 PLAID_ENV=sandbox
 PLAID_WEBHOOK_URL=https://your-domain.com/api/finance/webhooks/plaid/
+PLAID_ENCRYPTION_KEY=base64-encoded-fernet-key
+PLAID_WEBHOOK_SECRET=your_shared_webhook_secret
 
 # Google OAuth
 GOOGLE_CLIENT_ID=your_google_client_id
@@ -90,6 +111,35 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 # Frontend URL (important for OAuth)
 FRONTEND_URL=https://localhost  # Use https:// for OAuth testing
 ```
+
+## Plaid Sandbox Testing
+
+When testing with Plaid in **sandbox mode**, use these test credentials:
+
+### Phone Verification
+Plaid requires phone verification for identity. In sandbox:
+- **Phone Number:** `+14155550123` (or any `+1 415 555 xxxx`)
+- **Verification Code:** `123456`
+
+### Bank Login Credentials
+After phone verification, select any test bank and use:
+| Scenario | Username | Password |
+|----------|----------|----------|
+| Successful login | `user_good` | `pass_good` |
+| Account locked | `user_account_locked` | `pass_good` |
+| MFA required | `user_custom` | `pass_good` |
+| Item login required | `user_item_login` | `pass_good` |
+
+### Test Investment Accounts
+To test investment data with holdings:
+- Username: `user_good`
+- Password: `pass_good`
+- Select "Plaid Bank" → "Plaid IRA" or "Plaid 401k"
+
+### Common Sandbox Issues
+1. **"Invalid phone number"** - Use the test phone `+14155550123`
+2. **"Invalid credentials"** - Make sure to use `user_good` / `pass_good`
+3. **Button disabled** - Check backend logs for Plaid API key errors
 
 ## OAuth Institution Testing
 
@@ -131,14 +181,8 @@ docker-compose up backend db
 docker-compose up frontend
 ```
 
-### HTTPS Development
-```bash
-# Full HTTPS stack
-docker-compose -f docker-compose.yml -f docker-compose.https.yml up
-
-# With rebuild
-docker-compose -f docker-compose.yml -f docker-compose.https.yml up --build
-```
+### Staging & Production
+See `STAGING-SETUP.md` for creating a staging project, configuring secrets, and wiring Cloud Build triggers. Production follows the same pattern with different substitutions.
 
 ## Testing
 
@@ -152,15 +196,15 @@ npm run test:nutrition
 npm run test:finance
 
 # Run with Docker
-./docker-test.sh
+# (legacy scripts archived in infrastructure/archive if needed)
 ```
 
 ### Test Options
 1. **Quick Tests**: Essential tests only
 2. **Full Test Suite**: All tests with coverage
 3. **Individual Apps**: Test specific functionality
-4. **Docker Tests**: Isolated test environment
-5. **CI/CD Tests**: Production-like testing
+4. **Docker Tests**: Archived scripts for reference
+5. **CI/CD Tests**: Managed via Cloud Build (`cloudbuild.yaml`)
 
 ## API Documentation
 
@@ -185,6 +229,8 @@ npm run test:finance
 
 ### Financial Data Protection
 - Encrypted Plaid tokens
+- Application-managed Fernet key (`PLAID_ENCRYPTION_KEY`) for access token storage
+- Shared secret validation on Plaid webhook endpoint (`PLAID_WEBHOOK_SECRET`)
 - Secure OAuth flows
 - CORS protection
 - CSRF protection
@@ -231,7 +277,7 @@ npm run test:finance
 ## Production Deployment
 
 ### Environment Setup
-- Use production database (PostgreSQL/MySQL)
+- Use production database (PostgreSQL)
 - Set `DEBUG=False`
 - Configure proper SSL certificates
 - Set strong `SECRET_KEY`

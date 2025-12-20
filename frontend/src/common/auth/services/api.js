@@ -19,8 +19,8 @@ const processQueue = (error, token = null) => {
 // Create base API instance with environment-based configuration
 const api = axios.create({
   // Read API URL from environment variables with fallback values
-  baseURL: process.env.REACT_APP_API_URL ? 
-    process.env.REACT_APP_API_URL.replace(/\/api$/, '') : 
+  baseURL: import.meta.env.VITE_API_URL ?
+    import.meta.env.VITE_API_URL.replace(/\/api$/, '') :
     'http://localhost:8000',
   timeout: 10000, // 10 seconds timeout
   withCredentials: true, // Include cookies for session-based features like WebAuthn
@@ -66,7 +66,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       const refreshToken = localStorage.getItem('refreshToken');
-      
+
       if (refreshToken) {
         try {
           const response = await axios.post(`${api.defaults.baseURL}/api/token/refresh/`, {
@@ -75,15 +75,15 @@ api.interceptors.response.use(
 
           const { access } = response.data;
           localStorage.setItem('accessToken', access);
-          
+
           // Update the default header for future requests
           api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
-          
+
           // Retry the original request with new token
           originalRequest.headers.Authorization = `Bearer ${access}`;
-          
+
           processQueue(null, access);
-          
+
           return api(originalRequest);
         } catch (refreshError) {
           // Refresh failed, clear tokens and redirect to login
@@ -91,12 +91,12 @@ api.interceptors.response.use(
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           delete api.defaults.headers.common['Authorization'];
-          
+
           processQueue(refreshError, null);
-          
+
           // Redirect to login page
           window.location.href = '/login';
-          
+
           return Promise.reject(refreshError);
         } finally {
           isRefreshing = false;
