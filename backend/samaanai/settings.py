@@ -231,18 +231,49 @@ TEMPLATES = [
 WSGI_APPLICATION = 'samaanai.wsgi.application'
 
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('POSTGRES_DB', default='samaanai_dev'),
-        'USER': env('POSTGRES_USER', default='testuser'),
-        'PASSWORD': DB_PASSWORD if ENVIRONMENT == 'production' else env('POSTGRES_PASSWORD', default='testpass123'),
-        'HOST': env('DB_HOST', default='db'),
-        'PORT': env('DB_PORT', default='5432'),
-        'CONN_MAX_AGE': 600, # 10 minutes connection pooling
-        'CONN_HEALTH_CHECKS': True,
+# Database configuration
+# Supports DATABASE_URL (Cloud SQL) or individual env vars (docker-compose)
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # Parse DATABASE_URL for Cloud SQL
+    # Format: postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
+    import urllib.parse
+    url = urllib.parse.urlparse(DATABASE_URL)
+    
+    # Extract host from query params for Cloud SQL socket connections
+    query_params = urllib.parse.parse_qs(url.query)
+    db_host = query_params.get('host', [url.hostname or 'localhost'])[0]
+    
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': url.path[1:] if url.path else 'samaanai_finance',  # Remove leading /
+            'USER': url.username or 'finance_user',
+            'PASSWORD': url.password or '',
+            'HOST': db_host,
+            'PORT': url.port or '',
+            'CONN_MAX_AGE': 600,
+            'CONN_HEALTH_CHECKS': True,
+        }
     }
-}
+    logger.info(f"Using DATABASE_URL, connecting to host: {db_host}")
+else:
+    # Fallback for docker-compose / local development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': env('POSTGRES_DB', default='samaanai_dev'),
+            'USER': env('POSTGRES_USER', default='testuser'),
+            'PASSWORD': DB_PASSWORD if ENVIRONMENT == 'production' else env('POSTGRES_PASSWORD', default='testpass123'),
+            'HOST': env('DB_HOST', default='db'),
+            'PORT': env('DB_PORT', default='5432'),
+            'CONN_MAX_AGE': 600,
+            'CONN_HEALTH_CHECKS': True,
+        }
+    }
+    logger.info(f"Using individual DB env vars, connecting to host: {DATABASES['default']['HOST']}")
+
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
