@@ -58,8 +58,10 @@ const Register = () => {
   const handleGoogleSignup = () => {
     sessionStorage.setItem('postLoginRedirect', '/');
 
-    const baseUrl = import.meta.env.VITE_API_URL ?
-      import.meta.env.VITE_API_URL.replace(/\/api$/, '') :
+    // Get base URL - check both env var names for compatibility
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+    const baseUrl = apiUrl ?
+      apiUrl.replace(/\/api\/?$/, '') :
       'http://localhost:8000';
 
     const socialAuthUrl = `${baseUrl}/api/auth/social/login/google-oauth2/`;

@@ -79,9 +79,11 @@ const Login = () => {
     // Store the next path for post-login redirect
     sessionStorage.setItem('postLoginRedirect', nextPath);
 
-    // Get base URL (remove /api if present)
-    const baseUrl = import.meta.env.VITE_API_URL ?
-      import.meta.env.VITE_API_URL.replace(/\/api$/, '') :
+    // Get base URL - check both env var names for compatibility
+    // VITE_API_BASE_URL is set to backend_url/api, so we need to go up one level
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+    const baseUrl = apiUrl ?
+      apiUrl.replace(/\/api\/?$/, '') :
       'http://localhost:8000';
 
     // Construct the social auth URL - this triggers the OAuth flow
