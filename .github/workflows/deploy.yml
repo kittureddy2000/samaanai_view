@@ -86,6 +86,7 @@ jobs:
             --platform=managed \
             --allow-unauthenticated \
             --add-cloudsql-instances=${{ env.CLOUD_SQL_INSTANCE }} \
+            --timeout=300 \
             --set-secrets="SECRET_KEY=FINANCE_SECRET_KEY:latest,DATABASE_URL=FINANCE_DATABASE_URL:latest,PLAID_CLIENT_ID=FINANCE_PLAID_CLIENT_ID:latest,PLAID_SECRET_PRODUCTION=FINANCE_PLAID_SECRET:latest,PLAID_ENCRYPTION_KEY=FINANCE_PLAID_ENCRYPTION_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest" \
             --set-env-vars="ENVIRONMENT=production,PLAID_ENV=production,ALLOWED_HOSTS=*.run.app;finance.samaanai.com,DEBUG=False"
 
@@ -94,6 +95,12 @@ jobs:
         run: |
           URL=$(gcloud run services describe ${{ env.BACKEND_SERVICE }} --region=${{ env.REGION }} --format='value(status.url)')
           echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Update backend with OAuth URLs
+        run: |
+          gcloud run services update ${{ env.BACKEND_SERVICE }} \
+            --region=${{ env.REGION }} \
+            --update-env-vars="CLOUDRUN_SERVICE_URL=${{ steps.backend-url.outputs.url }},FRONTEND_URL=https://samaanai-finance-frontend-fdra3qcqxq-uc.a.run.app"
 
     outputs:
       backend_url: ${{ steps.backend-url.outputs.url }}
