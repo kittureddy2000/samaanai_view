@@ -232,18 +232,34 @@ WSGI_APPLICATION = 'samaanai.wsgi.application'
 
 
 # Database configuration
-# Supports DATABASE_URL (Cloud SQL) or individual env vars (docker-compose)
+# Supports DATABASE_URL (TCP or Cloud SQL socket) or individual env vars (docker-compose)
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # Parse DATABASE_URL for Cloud SQL
-    # Format: postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
+    # Parse DATABASE_URL
+    # TCP format: postgresql://user:pass@hostname:port/dbname
+    # Socket format: postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
     import urllib.parse
     url = urllib.parse.urlparse(DATABASE_URL)
     
-    # Extract host from query params for Cloud SQL socket connections
+    # Check if using TCP (hostname present) or Unix socket (host in query params)
     query_params = urllib.parse.parse_qs(url.query)
-    db_host = query_params.get('host', [url.hostname or 'localhost'])[0]
+    socket_host = query_params.get('host', [None])[0]
+    
+    if url.hostname:
+        # TCP connection (preferred for Cloud Run)
+        db_host = url.hostname
+        db_port = url.port or 5432
+        logger.info(f"Using TCP DATABASE_URL, connecting to: {db_host}:{db_port}")
+    elif socket_host:
+        # Unix socket connection (Cloud SQL proxy)
+        db_host = socket_host
+        db_port = ''
+        logger.info(f"Using socket DATABASE_URL, connecting via: {db_host}")
+    else:
+        db_host = 'localhost'
+        db_port = 5432
+        logger.warning("Could not parse DATABASE_URL host, using localhost")
     
     DATABASES = {
         'default': {
@@ -252,15 +268,14 @@ if DATABASE_URL:
             'USER': url.username or 'finance_user',
             'PASSWORD': url.password or '',
             'HOST': db_host,
-            'PORT': url.port or '',
-            'CONN_MAX_AGE': 0,  # Disable persistent connections for Cloud Run compatibility
+            'PORT': db_port,
+            'CONN_MAX_AGE': 0,  # Disable persistent connections for Cloud Run
             'CONN_HEALTH_CHECKS': True,
             'OPTIONS': {
-                'connect_timeout': 10,  # Timeout after 10 seconds
+                'connect_timeout': 10,
             },
         }
     }
-    logger.info(f"Using DATABASE_URL, connecting to host: {db_host}")
 else:
     # Fallback for docker-compose / local development
     DATABASES = {
