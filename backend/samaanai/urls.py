@@ -5,7 +5,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from apps.users.views import social_auth_token
-from .health import health_check
+from .health import health_check, ping
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/auth/social/', include('social_django.urls', namespace='social')),
     path('api/auth/social/token/', social_auth_token, name='social_token'),
     path('health/', health_check, name='health_check'),
+    path('ping/', ping, name='ping'),
 ]
 
 if settings.DEBUG:

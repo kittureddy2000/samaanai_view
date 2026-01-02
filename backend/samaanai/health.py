@@ -2,6 +2,13 @@ from django.http import JsonResponse
 from django.db import connection
 from django.db.utils import OperationalError
 
+def ping(request):
+    """
+    Simple ping endpoint that doesn't access the database.
+    Used to verify basic HTTP connectivity.
+    """
+    return JsonResponse({"status": "pong", "message": "Server is responding"}, status=200)
+
 def health_check(request):
     """
     Simple health check that verifies database connectivity.
