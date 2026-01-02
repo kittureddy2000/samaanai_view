@@ -16,6 +16,7 @@ env:
   BACKEND_SERVICE: samaanai-finance-backend
   FRONTEND_SERVICE: samaanai-finance-frontend
   CLOUD_SQL_INSTANCE: samaanai-prod-1009-124126:us-west1:samaanai-prod-postgres
+  BACKEND_URL: https://samaanai-finance-backend-172298808029.us-central1.run.app
 
 jobs:
   test:
@@ -153,7 +154,7 @@ jobs:
         working-directory: frontend
         run: |
           IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/frontend:${{ github.sha }}
-          docker build --build-arg VITE_API_BASE_URL=${{ needs.deploy-backend.outputs.backend_url }}/api -t $IMAGE .
+          docker build --build-arg VITE_API_BASE_URL=${{ env.BACKEND_URL }}/api -t $IMAGE .
           docker push $IMAGE
 
       - name: Deploy frontend to Cloud Run
