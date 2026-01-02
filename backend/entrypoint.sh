@@ -54,15 +54,9 @@ else
     echo "Collecting static files..."
     python manage.py collectstatic --noinput || true
     
-    # Start Gunicorn server
+    # Start Gunicorn server with config file
     PORT=${PORT:-8080}
     echo "Starting Gunicorn server on port $PORT..."
     exec gunicorn samaanai.wsgi:application \
-        --bind 0.0.0.0:$PORT \
-        --workers 2 \
-        --threads 4 \
-        --timeout 300 \
-        --access-logfile - \
-        --error-logfile - \
-        --log-level info
+        --config gunicorn.conf.py
 fi
