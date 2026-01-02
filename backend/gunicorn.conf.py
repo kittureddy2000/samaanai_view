@@ -28,12 +28,17 @@ def post_fork(server, worker):
     Close any open database connections to prevent sharing across fork boundary.
     """
     try:
+        # Configure Django settings first
+        import django
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'samaanai.settings')
+        django.setup()
+        
         from django.db import connections
         for conn in connections.all():
             conn.close()
         server.log.info(f"Worker {worker.pid}: Closed inherited database connections")
     except Exception as e:
-        server.log.error(f"Worker {worker.pid}: Error closing DB connections: {e}")
+        server.log.warning(f"Worker {worker.pid}: Note - {e}")
 
 
 def worker_exit(server, worker):
