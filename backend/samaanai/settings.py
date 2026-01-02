@@ -253,8 +253,11 @@ if DATABASE_URL:
             'PASSWORD': url.password or '',
             'HOST': db_host,
             'PORT': url.port or '',
-            'CONN_MAX_AGE': 600,
+            'CONN_MAX_AGE': 0,  # Disable persistent connections for Cloud Run compatibility
             'CONN_HEALTH_CHECKS': True,
+            'OPTIONS': {
+                'connect_timeout': 10,  # Timeout after 10 seconds
+            },
         }
     }
     logger.info(f"Using DATABASE_URL, connecting to host: {db_host}")

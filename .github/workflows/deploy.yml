@@ -100,7 +100,7 @@ jobs:
         run: |
           gcloud run services update ${{ env.BACKEND_SERVICE }} \
             --region=${{ env.REGION }} \
-            --update-env-vars="CLOUDRUN_SERVICE_URL=${{ steps.backend-url.outputs.url }},FRONTEND_URL=https://samaanai-finance-frontend-fdra3qcqxq-uc.a.run.app"
+            --update-env-vars="CLOUDRUN_SERVICE_URL=${{ steps.backend-url.outputs.url }},FRONTEND_URL=https://finance.samaanai.com"
 
     outputs:
       backend_url: ${{ steps.backend-url.outputs.url }}
