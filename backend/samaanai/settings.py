@@ -136,8 +136,17 @@ elif ENVIRONMENT.lower() == 'production':
     EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
     EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 
-    # --- Google Cloud Logging ---
+    # --- Google Cloud Logging (with timeout to prevent blocking) ---
+    import signal
+    
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Cloud Logging client initialization timed out")
+    
     try:
+        # Set a 5 second timeout for Cloud Logging initialization
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(5)
+        
         log_client = google.cloud.logging.Client()
         gcp_logging_handler = CloudLoggingHandler(log_client, name="django_app_logs")
         gcp_logging_handler.setLevel(logging.INFO) 
@@ -145,7 +154,12 @@ elif ENVIRONMENT.lower() == 'production':
         root_logger = logging.getLogger()
         root_logger.addHandler(gcp_logging_handler)
         logger.info("Successfully set up Google Cloud Logging.")
+        
+        signal.alarm(0)  # Cancel the alarm
+        signal.signal(signal.SIGALRM, old_handler)  # Restore old handler
 
+    except TimeoutError:
+        logger.warning("Google Cloud Logging client timed out, using console logging only.")
     except Exception as e:
         logger.error(f"Failed to set up Google Cloud Logging: {e}")
 
