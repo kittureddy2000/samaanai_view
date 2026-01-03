@@ -490,8 +490,8 @@ else:
         SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = f'{cloudrun_url}/api/auth/social/complete/google-oauth2/'
         logger.info(f"Using CLOUDRUN_SERVICE_URL for OAuth redirect: {SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI}")
     else:
-        # Fallback: use the actual Cloud Run URL - UPDATE THIS if your service name/region changes
-        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://samaanai-finance-backend-fdra3qcqxq-uc.a.run.app/api/auth/social/complete/google-oauth2/'
+        # Fallback: use the actual Cloud Run URL in us-west1
+        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://samaanai-finance-backend-172298808029.us-west1.run.app/api/auth/social/complete/google-oauth2/'
         logger.warning(f"CLOUDRUN_SERVICE_URL not set, using fallback OAuth redirect: {SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI}")
     SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
 
