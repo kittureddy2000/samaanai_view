@@ -6,10 +6,11 @@ import os
 # Server socket
 bind = f"0.0.0.0:{os.environ.get('PORT', '8080')}"
 
-# Worker processes - use fewer workers for faster startup on Cloud Run
-# Cloud Run instances are ephemeral, so we optimize for fast startup
-workers = 2
-worker_class = 'sync'
+# Worker processes - use gthread for better concurrency
+# Each worker will have multiple threads to handle requests
+workers = 1
+worker_class = 'gthread'
+threads = 4
 timeout = 300
 
 # Logging
