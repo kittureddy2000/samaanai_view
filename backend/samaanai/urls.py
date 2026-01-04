@@ -1,13 +1,25 @@
+import sys
+print("URLS: Starting URL module import", file=sys.stderr, flush=True)
+
 from django.contrib import admin
 from django.urls import path, include
+print("URLS: Imported Django core", file=sys.stderr, flush=True)
+
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+print("URLS: Imported JWT views", file=sys.stderr, flush=True)
+
 from apps.users.views import social_auth_token
+print("URLS: Imported users views", file=sys.stderr, flush=True)
+
 from .health import health_check, ping
+print("URLS: Imported health views", file=sys.stderr, flush=True)
+
 from django.conf import settings
 from django.conf.urls.static import static
+print("URLS: Imported settings and static", file=sys.stderr, flush=True)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
