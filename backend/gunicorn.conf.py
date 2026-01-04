@@ -18,7 +18,15 @@ accesslog = '-'
 errorlog = '-'
 loglevel = 'info'
 
-# Disable preload_app to avoid worker hanging issues on Cloud Run
-# Each worker will load Django independently, which is more reliable
-# for ephemeral Cloud Run instances
-preload_app = False
+# Enable preload_app since Django loads successfully during migrations
+# This loads the application once in the main process, workers just fork
+# Avoids duplicate Django initialization which seems to hang
+preload_app = True
+
+def post_fork(server, worker):
+    """Called after a worker has been forked."""
+    # Close database connections in the forked worker
+    # They will be recreated on first use
+    from django.db import connections
+    for conn in connections.all():
+        conn.close()
