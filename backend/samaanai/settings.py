@@ -209,7 +209,7 @@ INSTALLED_APPS = [
     'apps.users.apps.UsersConfig',
     'apps.finance.apps.FinanceConfig',
     'apps.notifications',  # Add notifications app
-    'social_django',
+    # TEMPORARILY DISABLED TO DEBUG HANG: 'social_django',
 ]
 
 MIDDLEWARE = [
