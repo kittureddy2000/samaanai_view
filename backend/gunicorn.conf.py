@@ -6,11 +6,10 @@ import os
 # Server socket
 bind = f"0.0.0.0:{os.environ.get('PORT', '8080')}"
 
-# Worker processes - use gthread for better concurrency
-# Each worker will have multiple threads to handle requests
-workers = 1
-worker_class = 'gthread'
-threads = 4
+# Worker processes - use sync workers to avoid threading issues
+# Sync workers are more reliable for Django on Cloud Run
+workers = 2
+worker_class = 'sync'
 timeout = 300
 
 # Logging
@@ -18,15 +17,5 @@ accesslog = '-'
 errorlog = '-'
 loglevel = 'info'
 
-# Enable preload_app since Django loads successfully during migrations
-# This loads the application once in the main process, workers just fork
-# Avoids duplicate Django initialization which seems to hang
-preload_app = True
-
-def post_fork(server, worker):
-    """Called after a worker has been forked."""
-    # Close database connections in the forked worker
-    # They will be recreated on first use
-    from django.db import connections
-    for conn in connections.all():
-        conn.close()
+# Disable preload_app for Cloud Run ephemeral instances
+preload_app = False
