@@ -49,14 +49,19 @@ if [ "$ENVIRONMENT" = "development" ]; then
     python manage.py runserver 0.0.0.0:8000
 else
     echo "Starting in PRODUCTION mode..."
-    
+
     # Collect static files
     echo "Collecting static files..."
     python manage.py collectstatic --noinput || true
-    
-    # Start Gunicorn server with config file
+
+    # TEMPORARILY use runserver to test if gunicorn-specific issue
     PORT=${PORT:-8080}
-    echo "Starting Gunicorn server on port $PORT..."
-    exec gunicorn samaanai.wsgi:application \
-        --config gunicorn.conf.py
+    echo "TEMPORARY: Starting Django runserver on port $PORT..."
+    exec python manage.py runserver 0.0.0.0:$PORT
+
+    # Start Gunicorn server with config file
+    # PORT=${PORT:-8080}
+    # echo "Starting Gunicorn server on port $PORT..."
+    # exec gunicorn samaanai.wsgi:application \
+    #     --config gunicorn.conf.py
 fi
