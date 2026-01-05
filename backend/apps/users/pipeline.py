@@ -30,9 +30,9 @@ def generate_tokens_and_redirect_to_frontend(strategy, backend, user, response, 
         # Get the original 'next' parameter passed to the social login URL
         original_next_param = strategy.session_get('next') # Try session first
         if not original_next_param:
-            original_next_param = strategy.request.GET.get('next', '/')
+            original_next_param = strategy.request.GET.get('next', '')
             if not original_next_param or original_next_param == '/':
-                 original_next_param = strategy.session_get('postLoginRedirect', '/') # From React's sessionStorage via Login.js
+                 original_next_param = strategy.session_get('postLoginRedirect', '/finance') # Default to finance dashboard
 
         logger.info(f"Next parameter: {original_next_param}")
 
