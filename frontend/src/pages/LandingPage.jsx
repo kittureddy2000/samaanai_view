@@ -84,20 +84,8 @@ const LandingPage = () => {
           </HeroTitle>
 
           <HeroSubtitle>
-            Take control of your finances with intelligent insights,
-            real-time tracking, and seamless management across all your accounts.
+            Choose an application below to get started
           </HeroSubtitle>
-
-          {!isAuthenticated && (
-            <CTAContainer>
-              <PrimaryCTA onClick={() => navigate('/register')}>
-                Get Started Free
-              </PrimaryCTA>
-              <SecondaryCTA onClick={() => navigate('/login')}>
-                Sign In
-              </SecondaryCTA>
-            </CTAContainer>
-          )}
         </HeroContent>
       </HeroSection>
 
