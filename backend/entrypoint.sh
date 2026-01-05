@@ -54,14 +54,9 @@ else
     echo "Collecting static files..."
     python manage.py collectstatic --noinput || true
 
-    # TEMPORARILY use runserver to test if gunicorn-specific issue
+    # Start uWSGI server with configuration file
     PORT=${PORT:-8080}
-    echo "TEMPORARY: Starting Django runserver on port $PORT..."
-    exec python manage.py runserver 0.0.0.0:$PORT
-
-    # Start Gunicorn server with config file
-    # PORT=${PORT:-8080}
-    # echo "Starting Gunicorn server on port $PORT..."
-    # exec gunicorn samaanai.wsgi:application \
-    #     --config gunicorn.conf.py
+    echo "Starting uWSGI server on port $PORT..."
+    export PORT
+    exec uwsgi --ini uwsgi.ini
 fi

@@ -28,7 +28,7 @@ urlpatterns = [
     path('api/users/', include('apps.users.urls')),
     path('api/finance/', include('apps.finance.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
-    # TEMPORARILY DISABLED: path('api/auth/social/', include('social_django.urls', namespace='social')),
+    path('api/auth/social/', include('social_django.urls', namespace='social')),
     path('api/auth/social/token/', social_auth_token, name='social_token'),
     path('health/', health_check, name='health_check'),
     path('ping/', ping, name='ping'),

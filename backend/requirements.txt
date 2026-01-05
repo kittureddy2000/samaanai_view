@@ -31,3 +31,4 @@ django-sendgrid-v5>=1.2.0
 # WebAuthn dependencies
 webauthn>=1.11.0
 cryptography>=41.0.0
+uwsgi>=2.0

@@ -202,14 +202,14 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
-    # TEMPORARILY DISABLED TO DEBUG HANG: 'rest_framework_simplejwt.token_blacklist',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'storages', # For GCS
-    # Local apps (Calorie Tracker)
+    'social_django',
+    # Local apps
     'apps.users.apps.UsersConfig',
     'apps.finance.apps.FinanceConfig',
-    'apps.notifications',  # Add notifications app
-    # TEMPORARILY DISABLED TO DEBUG HANG: 'social_django',
+    'apps.notifications',
 ]
 
 MIDDLEWARE = [
