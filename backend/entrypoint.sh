@@ -54,9 +54,10 @@ else
     echo "Collecting static files..."
     python manage.py collectstatic --noinput || true
 
-    # Start uWSGI server with configuration file
+    # Use Django runserver for now - uWSGI/gunicorn have request handling issues
+    # Both WSGI servers load Django successfully but requests hang/timeout
+    # This is a temporary solution until the WSGI server issue is resolved
     PORT=${PORT:-8080}
-    echo "Starting uWSGI server on port $PORT..."
-    export PORT
-    exec uwsgi --ini uwsgi.ini
+    echo "Starting Django runserver on 0.0.0.0:$PORT..."
+    exec python manage.py runserver 0.0.0.0:$PORT
 fi
