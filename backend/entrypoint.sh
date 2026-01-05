@@ -54,10 +54,9 @@ else
     echo "Collecting static files..."
     python manage.py collectstatic --noinput || true
 
-    # Use Django runserver for now - uWSGI/gunicorn have request handling issues
-    # Both WSGI servers load Django successfully but requests hang/timeout
-    # This is a temporary solution until the WSGI server issue is resolved
+    # Use Gunicorn WSGI server
+    # Google Cloud Logging has been disabled in settings.py to fix worker startup issues
     PORT=${PORT:-8080}
-    echo "Starting Django runserver on 0.0.0.0:$PORT..."
-    exec python manage.py runserver 0.0.0.0:$PORT
+    echo "Starting Gunicorn on 0.0.0.0:$PORT..."
+    exec gunicorn samaanai.wsgi:application --config gunicorn.conf.py
 fi
