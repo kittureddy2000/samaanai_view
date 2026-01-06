@@ -23,37 +23,42 @@ const SocialLoginCallback = () => {
         navigate('/login?error=callback_timeout', { replace: true });
       }
     }, 10000); // 10 second timeout
-    
-    const params = new URLSearchParams(window.location.search);
-    const access = params.get('access_token');
-    const refresh = params.get('refresh_token');
-    const nextPath = params.get('next') || sessionStorage.getItem('postLoginRedirect') || '/';
-    
-    if (access && refresh) {
-      hasProcessed.current = true;
-      
-      try {
-        setAuthTokens(access, refresh);
-        
-        // Clear any stored redirect path
-        sessionStorage.removeItem('postLoginRedirect');
-        
-        // Navigate to the intended page
-        navigate(nextPath, { replace: true });
-        
-        // Clear timeout since we're processing successfully
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
+
+    const processCallback = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const access = params.get('access_token');
+      const refresh = params.get('refresh_token');
+      const nextPath = params.get('next') || sessionStorage.getItem('postLoginRedirect') || '/';
+
+      if (access && refresh) {
+        hasProcessed.current = true;
+
+        try {
+          // Wait for user to be fetched before navigating
+          await setAuthTokens(access, refresh);
+
+          // Clear any stored redirect path
+          sessionStorage.removeItem('postLoginRedirect');
+
+          // Navigate to the intended page
+          navigate(nextPath, { replace: true });
+
+          // Clear timeout since we're processing successfully
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+          }
+        } catch (error) {
+          console.error('SocialLoginCallback: Error setting tokens:', error);
+          navigate('/login?error=token_error', { replace: true });
         }
-      } catch (error) {
-        console.error('SocialLoginCallback: Error setting tokens:', error);
-        navigate('/login?error=token_error', { replace: true });
+      } else {
+        console.error("SocialLoginCallback: Tokens missing in callback URL");
+        navigate('/login?error=missing_tokens', { replace: true });
       }
-    } else {
-      console.error("SocialLoginCallback: Tokens missing in callback URL");
-      navigate('/login?error=missing_tokens', { replace: true });
-    }
-    
+    };
+
+    processCallback();
+
     // Cleanup timeout on unmount
     return () => {
       if (timeoutRef.current) {

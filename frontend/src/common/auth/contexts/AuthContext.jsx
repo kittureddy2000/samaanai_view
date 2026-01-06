@@ -53,15 +53,15 @@ export function AuthProvider({ children }) {
   };
 
   // Set authentication tokens
-  const setAuthTokens = (access, refresh) => {
+  const setAuthTokens = async (access, refresh) => {
     localStorage.setItem('accessToken', access);
     localStorage.setItem('refreshToken', refresh);
 
     // Set authorization header
     api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
 
-    // Fetch user data
-    fetchCurrentUser();
+    // Fetch user data and return the promise
+    return await fetchCurrentUser();
   };
 
   // Initialize auth state on component mount
