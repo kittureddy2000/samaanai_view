@@ -215,11 +215,11 @@ const GradientOrb3 = styled.div`
 const HeroSection = styled.section`
   position: relative;
   z-index: 1;
-  min-height: 100vh;
+  min-height: 50vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: 4rem 2rem 2rem 2rem;
 `;
 
 const HeroContent = styled.div`
