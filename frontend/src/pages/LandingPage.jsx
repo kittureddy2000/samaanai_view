@@ -69,32 +69,21 @@ const LandingPage = () => {
         <GradientOrb3 />
       </AnimatedBackground>
 
-      {/* Hero Section */}
+      {/* Compact Hero Section */}
       <HeroSection>
         <HeroContent>
+          <WelcomeText>Welcome to</WelcomeText>
           <LogoContainer>
             <LogoIcon className="material-symbols-outlined">monitoring</LogoIcon>
             <LogoText>Samaanai</LogoText>
           </LogoContainer>
-
-          <HeroTitle>
-            Your Smart
-            <br />
-            <GradientText>Financial Companion</GradientText>
-          </HeroTitle>
-
-          <HeroSubtitle>
-            Choose an application below to get started
-          </HeroSubtitle>
+          <Tagline>Your Financial Dashboard</Tagline>
         </HeroContent>
       </HeroSection>
 
-      {/* Apps Section */}
+      {/* Apps Section - Front and Center */}
       <AppsSection>
-        <SectionTitle>Powerful Tools</SectionTitle>
-        <SectionSubtitle>
-          Everything you need to manage your financial life
-        </SectionSubtitle>
+        <SectionTitle>Choose an Application</SectionTitle>
 
         <AppsGrid>
           {apps.map((app) => (
@@ -112,20 +101,6 @@ const LandingPage = () => {
           ))}
         </AppsGrid>
       </AppsSection>
-
-      {/* Features Section */}
-      <FeaturesSection>
-        <SectionTitle>Why Samaanai?</SectionTitle>
-        <FeaturesGrid>
-          {features.map((feature, index) => (
-            <FeatureCard key={index}>
-              <FeatureIcon>{feature.icon}</FeatureIcon>
-              <FeatureTitle>{feature.title}</FeatureTitle>
-              <FeatureDescription>{feature.description}</FeatureDescription>
-            </FeatureCard>
-          ))}
-        </FeaturesGrid>
-      </FeaturesSection>
 
       {/* Footer */}
       <Footer>
@@ -215,29 +190,37 @@ const GradientOrb3 = styled.div`
 const HeroSection = styled.section`
   position: relative;
   z-index: 1;
-  min-height: 50vh;
+  padding: 3rem 2rem 1rem 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem 2rem 2rem;
 `;
 
 const HeroContent = styled.div`
   text-align: center;
-  max-width: 800px;
+  max-width: 600px;
+`;
+
+const WelcomeText = styled.p`
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 0.5rem 0;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 `;
 
 const LogoContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 2rem;
+  margin-bottom: 0.5rem;
 `;
 
 const LogoIcon = styled.span`
-  font-size: 3rem;
+  font-size: 2.5rem;
   color: #6366f1;
-  margin-right: 0.75rem;
+  margin-right: 0.5rem;
 `;
 
 const LogoText = styled.h1`
@@ -250,12 +233,11 @@ const LogoText = styled.h1`
   margin: 0;
 `;
 
-const HeroTitle = styled.h2`
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
-  font-weight: 800;
-  line-height: 1.1;
-  margin-bottom: 1.5rem;
-  color: white;
+const Tagline = styled.p`
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  font-weight: 400;
 `;
 
 const GradientText = styled.span`
@@ -265,16 +247,6 @@ const GradientText = styled.span`
   -webkit-text-fill-color: transparent;
   background-clip: text;
   animation: ${shimmer} 3s linear infinite;
-`;
-
-const HeroSubtitle = styled.p`
-  font-size: 1.25rem;
-  color: rgba(255, 255, 255, 0.7);
-  line-height: 1.6;
-  margin-bottom: 2.5rem;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
 `;
 
 const CTAContainer = styled.div`
@@ -322,14 +294,21 @@ const SecondaryCTA = styled.button`
 const AppsSection = styled.section`
   position: relative;
   z-index: 1;
-  padding: 6rem 2rem;
+  padding: 2rem 2rem 4rem 2rem;
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 `;
 
 const SectionTitle = styled.h3`
-  font-size: 2.5rem;
-  font-weight: 700;
+  font-size: 1.75rem;
+  font-weight: 600;
   text-align: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 3rem;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.02em;
 `;
 
 const SectionSubtitle = styled.p`
@@ -341,26 +320,29 @@ const SectionSubtitle = styled.p`
 
 const AppsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  max-width: 900px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 400px));
+  gap: 2.5rem;
+  max-width: 1000px;
   margin: 0 auto;
+  justify-content: center;
 `;
 
 const AppCard = styled.div`
   position: relative;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
-  padding: 2rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 2.5rem;
   cursor: pointer;
   transition: all 0.3s ease;
   overflow: hidden;
-  
+  backdrop-filter: blur(10px);
+
   &:hover {
-    transform: translateY(-8px);
-    border-color: rgba(255, 255, 255, 0.2);
-    
+    transform: translateY(-12px) scale(1.02);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+
     > div:first-child {
       opacity: 1;
     }
@@ -385,27 +367,33 @@ const AppCardContent = styled.div`
 `;
 
 const AppIconWrapper = styled.div`
-  width: 80px;
-  height: 80px;
-  border-radius: 20px;
+  width: 100px;
+  height: 100px;
+  border-radius: 24px;
   background: ${props => props.$gradient};
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1.5rem;
+  margin: 0 auto 1.5rem auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  svg {
+    font-size: 60px !important;
+  }
 `;
 
 const AppName = styled.h4`
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.75rem 0;
+  color: white;
 `;
 
 const AppDescription = styled.p`
-  font-size: 1rem;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0 0 1rem 0;
-  line-height: 1.5;
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0 0 1.5rem 0;
+  line-height: 1.6;
 `;
 
 const AppArrow = styled.span`
