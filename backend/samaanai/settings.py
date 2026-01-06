@@ -464,15 +464,21 @@ if ENVIRONMENT == 'development':
         SOCIAL_AUTH_REDIRECT_IS_HTTPS = False
         logger.info("Using HTTP OAuth redirect for development")
 else:
-    # Production Google OAuth configuration - construct from environment variable or use a default
-    cloudrun_url = env("CLOUDRUN_SERVICE_URL", default=None)
-    if cloudrun_url:
-        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = f'{cloudrun_url}/api/auth/social/complete/google-oauth2/'
-        logger.info(f"Using CLOUDRUN_SERVICE_URL for OAuth redirect: {SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI}")
+    # Production Google OAuth configuration - use custom domain
+    # Custom domain takes precedence over CLOUDRUN_SERVICE_URL for OAuth
+    custom_api_domain = env("CUSTOM_API_DOMAIN", default=None)
+    if custom_api_domain:
+        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = f'{custom_api_domain}/api/auth/social/complete/google-oauth2/'
+        logger.info(f"Using CUSTOM_API_DOMAIN for OAuth redirect: {SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI}")
     else:
-        # Fallback: use the actual Cloud Run URL in us-west1
-        SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://samaanai-finance-backend-172298808029.us-west1.run.app/api/auth/social/complete/google-oauth2/'
-        logger.warning(f"CLOUDRUN_SERVICE_URL not set, using fallback OAuth redirect: {SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI}")
+        cloudrun_url = env("CLOUDRUN_SERVICE_URL", default=None)
+        if cloudrun_url:
+            SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = f'{cloudrun_url}/api/auth/social/complete/google-oauth2/'
+            logger.info(f"Using CLOUDRUN_SERVICE_URL for OAuth redirect: {SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI}")
+        else:
+            # Fallback: use the custom domain directly
+            SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = 'https://api.finance.samaanai.com/api/auth/social/complete/google-oauth2/'
+            logger.warning(f"Neither CUSTOM_API_DOMAIN nor CLOUDRUN_SERVICE_URL set, using default custom domain: {SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI}")
     SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
 
 # SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/api/auth/social/token/' # Commented out
