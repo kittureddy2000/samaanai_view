@@ -393,7 +393,7 @@ const LayoutRoot = styled.div`
 const MainContent = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 0 24px 24px 24px;
+  padding: 0 16px 16px 16px;
   background: #0f0f1a;
   min-width: 0;
   

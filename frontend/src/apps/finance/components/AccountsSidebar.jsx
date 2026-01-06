@@ -614,7 +614,7 @@ const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccou
 };
 
 const SidebarRoot = styled.div`
-  width: 280px;
+  width: 240px;
   background: #16213e;
   border-right: 1px solid rgba(99, 102, 241, 0.15);
   display: flex;
@@ -797,7 +797,7 @@ const SectionHeaderContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 8px 12px;
   cursor: pointer;
   background: rgba(99, 102, 241, 0.1);
   border-bottom: 1px solid rgba(99, 102, 241, 0.15);
@@ -878,7 +878,7 @@ const AccountItemContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px 10px 40px;
+  padding: 8px 12px 8px 32px;
   cursor: pointer;
   background: ${props => props.$isSelected ? 'rgba(99, 102, 241, 0.2)' : 'transparent'};
   border-left: ${props => props.$isSelected ? '3px solid #6366f1' : '3px solid transparent'};

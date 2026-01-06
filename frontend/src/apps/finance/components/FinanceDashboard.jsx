@@ -835,8 +835,8 @@ const FinanceDashboard = ({ accounts, loading }) => {
       {error && <ErrorOverlay>{error}</ErrorOverlay>}
 
       <Paper elevation={0} sx={{
-        padding: '16px',
-        marginBottom: '24px',
+        padding: '12px',
+        marginBottom: '16px',
         background: 'rgba(26, 26, 46, 0.8)',
         backdropFilter: 'blur(10px)',
         border: '1px solid rgba(99, 102, 241, 0.2)',
@@ -1048,7 +1048,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
       </TilesContainer>
 
       {/* Transactions Table */}
-      <TransactionCard style={{ marginTop: '24px' }}>
+      <TransactionCard style={{ marginTop: '16px' }}>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#fff' }}>
           Recent Transactions
         </Typography>
@@ -1058,8 +1058,8 @@ const FinanceDashboard = ({ accounts, loading }) => {
           gap: 2,
           alignItems: 'center',
           flexWrap: 'wrap',
-          marginBottom: '20px',
-          padding: '16px',
+          marginBottom: '12px',
+          padding: '12px',
           backgroundColor: 'rgba(99, 102, 241, 0.1)',
           borderRadius: '12px',
           border: '1px solid rgba(99, 102, 241, 0.2)',
@@ -1249,9 +1249,9 @@ const FinanceDashboard = ({ accounts, loading }) => {
 };
 
 const DashboardContainer = styled.div`
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 16px;
   width: 100%;
 `;
 
@@ -1287,12 +1287,12 @@ const WidgetCard = styled.div`
   background: rgba(26, 26, 46, 0.8);
   backdrop-filter: blur(10px);
   border-radius: 16px;
-  padding: 24px;
+  padding: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(99, 102, 241, 0.2);
-  height: 420px !important;
-  min-height: 420px !important;
-  max-height: 420px !important;
+  height: 380px !important;
+  min-height: 380px !important;
+  max-height: 380px !important;
   display: flex;
   flex-direction: column;
   width: 100% !important;
@@ -1313,7 +1313,7 @@ const ChartContainer = styled.div.withConfig({
 `;
 
 const ChartTitle = styled(Typography)`
-  margin-bottom: 20px !important;
+  margin-bottom: 12px !important;
   font-weight: 600 !important;
   font-size: 1.125rem !important;
   color: #fff !important;
@@ -1332,7 +1332,7 @@ const TransactionCard = styled.div`
   background: rgba(26, 26, 46, 0.8);
   backdrop-filter: blur(10px);
   border-radius: 16px;
-  padding: 24px;
+  padding: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(99, 102, 241, 0.2);
   height: 600px;
@@ -1414,15 +1414,15 @@ const SortableHeader = styled.th`
 const TilesContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
 `;
 
 const TileRow = styled.div`
   display: flex;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
-  
+
   @media (max-width: 900px) {
     flex-direction: column;
   }
