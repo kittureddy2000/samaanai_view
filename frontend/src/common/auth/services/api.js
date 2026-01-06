@@ -19,8 +19,9 @@ const processQueue = (error, token = null) => {
 // Create base API instance with environment-based configuration
 const api = axios.create({
   // Read API URL from environment variables with fallback values
-  baseURL: import.meta.env.VITE_API_URL ?
-    import.meta.env.VITE_API_URL.replace(/\/api$/, '') :
+  // Check both VITE_API_BASE_URL (used in workflows) and VITE_API_URL (legacy)
+  baseURL: (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL) ?
+    (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL).replace(/\/api$/, '') :
     'http://localhost:8000',
   timeout: 10000, // 10 seconds timeout
   withCredentials: true, // Include cookies for session-based features like WebAuthn
