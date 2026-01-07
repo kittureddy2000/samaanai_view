@@ -138,7 +138,7 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         env:
-          VITE_API_BASE_URL: ${{ needs.deploy-backend.outputs.backend_url }}/api
+          VITE_API_BASE_URL: ${{ env.BACKEND_URL }}/api
         run: npm run build
 
       - name: Authenticate to Google Cloud
@@ -160,7 +160,7 @@ jobs:
         working-directory: frontend
         run: |
           IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/frontend:${{ github.sha }}
-          docker build --build-arg VITE_API_BASE_URL=${{ needs.deploy-backend.outputs.backend_url }}/api -t $IMAGE .
+          docker build --build-arg VITE_API_BASE_URL=${{ env.BACKEND_URL }}/api -t $IMAGE .
           docker push $IMAGE
 
       - name: Deploy frontend to Cloud Run
