@@ -141,7 +141,9 @@ class Account(models.Model):
     @property
     def display_name(self):
         """Returns custom name if set, otherwise returns the default name"""
-        return self.custom_name if self.custom_name else self.name
+        # Backward compatible - safely handle missing custom_name field
+        custom_name = getattr(self, 'custom_name', None)
+        return custom_name if custom_name else self.name
     
     @property
     def is_asset(self):

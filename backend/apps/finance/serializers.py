@@ -12,7 +12,7 @@ class AccountSerializer(serializers.ModelSerializer):
     balance_display = serializers.SerializerMethodField()
     type_display = serializers.CharField(source='get_type_display', read_only=True)
     subtype_display = serializers.CharField(source='get_subtype_display', read_only=True)
-    display_name = serializers.CharField(read_only=True)
+    display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
@@ -31,6 +31,12 @@ class AccountSerializer(serializers.ModelSerializer):
             # For credit cards and loans, show as negative
             return f"-${abs(obj.current_balance):,.2f}"
         return f"${obj.current_balance:,.2f}"
+
+    def get_display_name(self, obj):
+        """Get display name - backward compatible"""
+        # Safely handle accounts without custom_name field (before migration)
+        custom_name = getattr(obj, 'custom_name', None)
+        return custom_name if custom_name else obj.name
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -67,7 +73,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
 
 class TransactionSerializer(serializers.ModelSerializer):
     """Serializer for Transaction model"""
-    account_name = serializers.CharField(source='account.display_name', read_only=True)
+    account_name = serializers.SerializerMethodField()
     institution_name = serializers.CharField(source='account.institution.name', read_only=True)
     amount_display = serializers.SerializerMethodField()
     category_display = serializers.SerializerMethodField()
@@ -88,6 +94,12 @@ class TransactionSerializer(serializers.ModelSerializer):
             'account_name', 'institution_name'
         ]
     
+    def get_account_name(self, obj):
+        """Get account display name - backward compatible"""
+        # Safely handle accounts without custom_name field (before migration)
+        custom_name = getattr(obj.account, 'custom_name', None)
+        return custom_name if custom_name else obj.account.name
+
     def get_amount_display(self, obj):
         """Format amount for display"""
         # In Plaid, positive amounts are debits (money out)
@@ -96,7 +108,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             return f"-${obj.amount:,.2f}"
         else:
             return f"+${abs(obj.amount):,.2f}"
-    
+
     def get_category_display(self, obj):
         """Get human-readable category"""
         if obj.user_category:
