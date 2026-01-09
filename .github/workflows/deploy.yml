@@ -109,6 +109,42 @@ jobs:
             --region=${{ env.REGION }} \
             --update-env-vars="CLOUDRUN_SERVICE_URL=${{ steps.backend-url.outputs.url }}"
 
+      - name: Run database migrations
+        run: |
+          gcloud run jobs create migrate-${{ github.sha }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/backend:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --execute-now \
+            --wait \
+            --task-timeout=5m \
+            --max-retries=0 \
+            --add-cloudsql-instances=${{ env.CLOUD_SQL_INSTANCE }} \
+            --set-secrets="SECRET_KEY=FINANCE_SECRET_KEY:latest,DATABASE_URL=FINANCE_DATABASE_URL:latest,PLAID_CLIENT_ID=FINANCE_PLAID_CLIENT_ID:latest,PLAID_SECRET_PRODUCTION=FINANCE_PLAID_SECRET:latest,PLAID_ENCRYPTION_KEY=FINANCE_PLAID_ENCRYPTION_KEY:latest" \
+            --set-env-vars="ENVIRONMENT=production,PLAID_ENV=production" \
+            --command=python \
+            --args=manage.py,migrate || true
+
+          # Clean up the job after execution
+          gcloud run jobs delete migrate-${{ github.sha }} --region=${{ env.REGION }} --quiet || true
+
+      - name: Populate categories (one-time)
+        run: |
+          gcloud run jobs create populate-categories-${{ github.sha }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/backend:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --execute-now \
+            --wait \
+            --task-timeout=5m \
+            --max-retries=0 \
+            --add-cloudsql-instances=${{ env.CLOUD_SQL_INSTANCE }} \
+            --set-secrets="SECRET_KEY=FINANCE_SECRET_KEY:latest,DATABASE_URL=FINANCE_DATABASE_URL:latest,PLAID_CLIENT_ID=FINANCE_PLAID_CLIENT_ID:latest,PLAID_SECRET_PRODUCTION=FINANCE_PLAID_SECRET:latest,PLAID_ENCRYPTION_KEY=FINANCE_PLAID_ENCRYPTION_KEY:latest" \
+            --set-env-vars="ENVIRONMENT=production,PLAID_ENV=production" \
+            --command=python \
+            --args=manage.py,populate_categories || true
+
+          # Clean up the job after execution
+          gcloud run jobs delete populate-categories-${{ github.sha }} --region=${{ env.REGION }} --quiet || true
+
     outputs:
       backend_url: ${{ steps.backend-url.outputs.url }}
 
