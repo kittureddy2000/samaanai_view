@@ -16,7 +16,7 @@ env:
   BACKEND_SERVICE: samaanai-finance-backend
   FRONTEND_SERVICE: samaanai-finance-frontend
   CLOUD_SQL_INSTANCE: samaanai-prod-1009-124126:us-west1:samaanai-prod-postgres
-  BACKEND_URL: https://samaanai-finance-backend-172298808029.us-west1.run.app
+  BACKEND_URL: https://api.finance.samaanai.com
 
 jobs:
   test:
