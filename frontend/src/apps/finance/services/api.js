@@ -174,4 +174,16 @@ export const toggleExcludeFromReports = async (transactionId, exclude = null) =>
   }
 };
 
+// Update custom name for an account
+export const updateAccountCustomName = async (accountId, customName) => {
+  try {
+    const response = await api.patch(withBase(`/accounts/${accountId}/update_custom_name/`), {
+      custom_name: customName
+    });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error updating account custom name');
+  }
+};
+
 export default api;

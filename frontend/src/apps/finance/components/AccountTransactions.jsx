@@ -377,7 +377,7 @@ const AccountTransactions = ({ account }) => {
     <TxRoot>
       {/* Header */}
       <HeaderSection>
-        <HeaderTitle>Transactions for {account.name}</HeaderTitle>
+        <HeaderTitle>Transactions for {account.display_name || account.name}</HeaderTitle>
         <HeaderSubtitle>Showing {paginationInfo.count} transactions</HeaderSubtitle>
       </HeaderSection>
 

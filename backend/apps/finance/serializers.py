@@ -12,17 +12,18 @@ class AccountSerializer(serializers.ModelSerializer):
     balance_display = serializers.SerializerMethodField()
     type_display = serializers.CharField(source='get_type_display', read_only=True)
     subtype_display = serializers.CharField(source='get_subtype_display', read_only=True)
-    
+    display_name = serializers.CharField(read_only=True)
+
     class Meta:
         model = Account
         fields = [
-            'id', 'name', 'official_name', 'mask', 'type', 'subtype',
-            'type_display', 'subtype_display', 'current_balance', 
+            'id', 'name', 'custom_name', 'display_name', 'official_name', 'mask', 'type', 'subtype',
+            'type_display', 'subtype_display', 'current_balance',
             'available_balance', 'limit', 'iso_currency_code',
             'is_active', 'is_selected', 'is_asset', 'is_liability',
             'balance_display', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'is_asset', 'is_liability']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'is_asset', 'is_liability', 'display_name']
     
     def get_balance_display(self, obj):
         """Format balance for display"""
@@ -66,7 +67,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
 
 class TransactionSerializer(serializers.ModelSerializer):
     """Serializer for Transaction model"""
-    account_name = serializers.CharField(source='account.name', read_only=True)
+    account_name = serializers.CharField(source='account.display_name', read_only=True)
     institution_name = serializers.CharField(source='account.institution.name', read_only=True)
     amount_display = serializers.SerializerMethodField()
     category_display = serializers.SerializerMethodField()

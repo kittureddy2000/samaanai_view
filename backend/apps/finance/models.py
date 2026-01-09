@@ -111,6 +111,7 @@ class Account(models.Model):
     
     # Account info
     name = models.CharField(max_length=200)
+    custom_name = models.CharField(max_length=200, blank=True, null=True)  # User-defined custom name
     official_name = models.CharField(max_length=200, blank=True, null=True)
     mask = models.CharField(max_length=10, blank=True, null=True)  # Last 4 digits
     type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES)
@@ -134,7 +135,13 @@ class Account(models.Model):
         ordering = ['institution', 'name']
     
     def __str__(self):
-        return f"{self.name} ({self.mask})"
+        display_name = self.custom_name if self.custom_name else self.name
+        return f"{display_name} ({self.mask})"
+
+    @property
+    def display_name(self):
+        """Returns custom name if set, otherwise returns the default name"""
+        return self.custom_name if self.custom_name else self.name
     
     @property
     def is_asset(self):

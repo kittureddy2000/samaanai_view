@@ -411,8 +411,21 @@ class AccountViewSet(viewsets.ModelViewSet):
         account = self.get_object()
         account.is_selected = not account.is_selected
         account.save()
-        
+
         return Response({"is_selected": account.is_selected})
+
+    @action(detail=True, methods=['patch'])
+    def update_custom_name(self, request, pk=None):
+        """Update custom name for an account"""
+        account = self.get_object()
+        custom_name = request.data.get('custom_name', '').strip()
+
+        # Allow empty string to clear custom name
+        account.custom_name = custom_name if custom_name else None
+        account.save()
+
+        serializer = self.get_serializer(account)
+        return Response(serializer.data)
 
 
 class TransactionPagination(PageNumberPagination):

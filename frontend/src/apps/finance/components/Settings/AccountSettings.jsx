@@ -8,7 +8,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress
+  CircularProgress,
+  TextField,
+  IconButton
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -18,7 +20,10 @@ import {
   CheckCircle as ConnectedIcon,
   Error as ErrorIcon,
   Warning as WarningIcon,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Edit as EditIcon,
+  Check as CheckIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import styled from 'styled-components';
 import { usePlaidLink } from 'react-plaid-link';
@@ -28,7 +33,8 @@ import {
   syncInstitutionTransactions,
   deleteInstitution,
   createLinkToken,
-  exchangePublicToken
+  exchangePublicToken,
+  updateAccountCustomName
 } from '../../services/api';
 
 const AccountSettings = ({ accounts: realAccounts, loading, onRefreshAccounts }) => {
@@ -38,6 +44,8 @@ const AccountSettings = ({ accounts: realAccounts, loading, onRefreshAccounts })
   const [loadingActions, setLoadingActions] = useState({});
   const [reconnectingInst, setReconnectingInst] = useState(null);
   const [linkToken, setLinkToken] = useState(null);
+  const [editingAccountId, setEditingAccountId] = useState(null);
+  const [customNameValue, setCustomNameValue] = useState('');
   const { enqueueSnackbar } = useSnackbar();
 
   // Fetch institutions with their accounts
@@ -120,6 +128,38 @@ const AccountSettings = ({ accounts: realAccounts, loading, onRefreshAccounts })
     } finally {
       setLoadingActions(prev => ({ ...prev, [institutionId]: null }));
     }
+  };
+
+  const handleStartEditingCustomName = (accountId, currentCustomName) => {
+    setEditingAccountId(accountId);
+    setCustomNameValue(currentCustomName || '');
+  };
+
+  const handleSaveCustomName = async (accountId) => {
+    try {
+      const updatedAccount = await updateAccountCustomName(accountId, customNameValue);
+
+      // Update the institutions state with the new custom name
+      setInstitutions(prevInstitutions =>
+        prevInstitutions.map(inst => ({
+          ...inst,
+          accounts: inst.accounts?.map(acc =>
+            acc.id === accountId ? { ...acc, custom_name: updatedAccount.custom_name, display_name: updatedAccount.display_name } : acc
+          )
+        }))
+      );
+
+      enqueueSnackbar('Account name updated successfully', { variant: 'success' });
+      setEditingAccountId(null);
+      setCustomNameValue('');
+    } catch (error) {
+      enqueueSnackbar('Failed to update account name', { variant: 'error' });
+    }
+  };
+
+  const handleCancelEditingCustomName = () => {
+    setEditingAccountId(null);
+    setCustomNameValue('');
   };
 
   const getStatusInfo = (institution) => {
@@ -252,9 +292,70 @@ const AccountSettings = ({ accounts: realAccounts, loading, onRefreshAccounts })
                 <AccountsList>
                   {institution.accounts?.map((account) => (
                     <AccountRow key={account.id}>
-                      <AccountInfo>
-                        <AccountName>{account.name}</AccountName>
-                        <AccountType>{account.type} • ****{account.mask}</AccountType>
+                      <AccountInfo style={{ flex: 1 }}>
+                        {editingAccountId === account.id ? (
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', width: '100%' }}>
+                            <TextField
+                              value={customNameValue}
+                              onChange={(e) => setCustomNameValue(e.target.value)}
+                              placeholder={account.name}
+                              size="small"
+                              fullWidth
+                              autoFocus
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  color: '#fff',
+                                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                  '& fieldset': { borderColor: 'rgba(99, 102, 241, 0.3)' },
+                                  '&:hover fieldset': { borderColor: 'rgba(99, 102, 241, 0.5)' },
+                                  '&.Mui-focused fieldset': { borderColor: '#6366f1' },
+                                }
+                              }}
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSaveCustomName(account.id);
+                                } else if (e.key === 'Escape') {
+                                  handleCancelEditingCustomName();
+                                }
+                              }}
+                            />
+                            <IconButton
+                              size="small"
+                              onClick={() => handleSaveCustomName(account.id)}
+                              sx={{ color: '#10b981' }}
+                            >
+                              <CheckIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              onClick={handleCancelEditingCustomName}
+                              sx={{ color: '#ef4444' }}
+                            >
+                              <CloseIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                            <Box sx={{ flex: 1 }}>
+                              <AccountName>
+                                {account.display_name || account.name}
+                                {account.custom_name && (
+                                  <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginLeft: '8px' }}>
+                                    (was: {account.name})
+                                  </span>
+                                )}
+                              </AccountName>
+                              <AccountType>{account.type} • ****{account.mask}</AccountType>
+                            </Box>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleStartEditingCustomName(account.id, account.custom_name)}
+                              sx={{ color: 'rgba(255,255,255,0.5)', '&:hover': { color: '#6366f1' } }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        )}
                       </AccountInfo>
                       <AccountBalance $negative={account.current_balance < 0}>
                         ${Math.abs(account.current_balance || 0).toLocaleString(undefined, {
