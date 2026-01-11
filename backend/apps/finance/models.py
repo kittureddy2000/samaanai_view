@@ -328,6 +328,109 @@ class MonthlySpending(models.Model):
         return f"{self.category.name} - {self.year}/{self.month}: ${self.amount_spent}"
 
 
+class RecurringTransaction(models.Model):
+    """User-defined recurring transactions (subscriptions, bills, etc.)"""
+    
+    FREQUENCY_CHOICES = [
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('bi_weekly', 'Bi-Weekly'),
+        ('monthly', 'Monthly'),
+        ('quarterly', 'Quarterly'),
+        ('semi_annually', 'Semi-Annually'),
+        ('yearly', 'Yearly'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recurring_transactions')
+    
+    # Transaction details
+    name = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    is_income = models.BooleanField(default=False)  # True for income, False for expense
+    
+    # Scheduling
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, default='monthly')
+    start_date = models.DateField()
+    next_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)  # Optional end date
+    
+    # Categorization
+    category = models.ForeignKey(
+        SpendingCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recurring_transactions'
+    )
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    is_auto_detected = models.BooleanField(default=False)  # Auto-detected from transaction patterns
+    
+    # Optional fields
+    notes = models.TextField(blank=True, null=True)
+    merchant_name = models.CharField(max_length=200, blank=True, null=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['next_date', 'name']
+    
+    def __str__(self):
+        direction = "+" if self.is_income else "-"
+        return f"{self.name} ({direction}${self.amount} {self.get_frequency_display()})"
+    
+    def calculate_next_date(self):
+        """Calculate the next occurrence based on frequency"""
+        from dateutil.relativedelta import relativedelta
+        from datetime import timedelta
+        
+        current = self.next_date
+        
+        if self.frequency == 'daily':
+            return current + timedelta(days=1)
+        elif self.frequency == 'weekly':
+            return current + timedelta(weeks=1)
+        elif self.frequency == 'bi_weekly':
+            return current + timedelta(weeks=2)
+        elif self.frequency == 'monthly':
+            return current + relativedelta(months=1)
+        elif self.frequency == 'quarterly':
+            return current + relativedelta(months=3)
+        elif self.frequency == 'semi_annually':
+            return current + relativedelta(months=6)
+        elif self.frequency == 'yearly':
+            return current + relativedelta(years=1)
+        
+        return current
+    
+    @property
+    def is_due_soon(self):
+        """Check if due within next 7 days"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        today = timezone.now().date()
+        return self.next_date <= today + timedelta(days=7)
+    
+    @property
+    def monthly_amount(self):
+        """Calculate monthly equivalent amount"""
+        multipliers = {
+            'daily': 30,
+            'weekly': 4.33,
+            'bi_weekly': 2.17,
+            'monthly': 1,
+            'quarterly': 1/3,
+            'semi_annually': 1/6,
+            'yearly': 1/12,
+        }
+        return float(self.amount) * multipliers.get(self.frequency, 1)
+
+
 class NetWorthSnapshot(models.Model):
     """Daily snapshot of user's net worth"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

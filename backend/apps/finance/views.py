@@ -14,14 +14,16 @@ from django.conf import settings
 
 from .models import (
     Institution, Account, Transaction, SpendingCategory,
-    MonthlySpending, NetWorthSnapshot, PlaidWebhook, Holding, InvestmentTransaction
+    MonthlySpending, NetWorthSnapshot, PlaidWebhook, Holding, InvestmentTransaction,
+    RecurringTransaction
 )
 from .serializers import (
     InstitutionSerializer, AccountSerializer, TransactionSerializer,
     SpendingCategorySerializer, MonthlySpendingSerializer,
     NetWorthSnapshotSerializer, PlaidLinkTokenSerializer,
     PlaidPublicTokenExchangeSerializer, PlaidWebhookSerializer,
-    DashboardSerializer, HoldingSerializer, InvestmentTransactionSerializer
+    DashboardSerializer, HoldingSerializer, InvestmentTransactionSerializer,
+    RecurringTransactionSerializer
 )
 from .services import PlaidService, TransactionSyncService, AnalyticsService
 
@@ -628,6 +630,57 @@ class SpendingCategoryViewSet(viewsets.ModelViewSet):
         
         serializer = SpendingCategoryTreeSerializer(root_categories, many=True)
         return Response(serializer.data)
+
+
+class RecurringTransactionViewSet(viewsets.ModelViewSet):
+    """ViewSet for recurring transactions (subscriptions, bills, etc.)"""
+    serializer_class = RecurringTransactionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = RecurringTransaction.objects.filter(user=self.request.user)
+        
+        # Filter by active status
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        # Filter by category
+        category_id = self.request.query_params.get('category')
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
+        
+        # Filter by income/expense
+        is_income = self.request.query_params.get('is_income')
+        if is_income is not None:
+            queryset = queryset.filter(is_income=is_income.lower() == 'true')
+        
+        return queryset.select_related('category')
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get summary of recurring transactions"""
+        recurring = self.get_queryset().filter(is_active=True)
+        
+        # Calculate monthly totals
+        monthly_income = sum(r.monthly_amount for r in recurring if r.is_income)
+        monthly_expenses = sum(r.monthly_amount for r in recurring if not r.is_income)
+        
+        # Get upcoming (due in next 7 days)
+        upcoming = [r for r in recurring if r.is_due_soon]
+        upcoming_serializer = RecurringTransactionSerializer(upcoming, many=True)
+        
+        return Response({
+            'monthly_income': round(monthly_income, 2),
+            'monthly_expenses': round(monthly_expenses, 2),
+            'net_monthly': round(monthly_income - monthly_expenses, 2),
+            'total_active': recurring.count(),
+            'upcoming_count': len(upcoming),
+            'upcoming': upcoming_serializer.data
+        })
 
 
 class HoldingViewSet(viewsets.ReadOnlyModelViewSet):

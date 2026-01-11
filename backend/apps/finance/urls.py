@@ -5,6 +5,7 @@ from .views import (
     AccountViewSet,
     TransactionViewSet,
     SpendingCategoryViewSet,
+    RecurringTransactionViewSet,
     HoldingViewSet,
     InvestmentTransactionViewSet,
     CreateLinkTokenView,
@@ -21,6 +22,7 @@ router.register(r'institutions', InstitutionViewSet, basename='institution')
 router.register(r'accounts', AccountViewSet, basename='account')
 router.register(r'transactions', TransactionViewSet, basename='transaction')
 router.register(r'spending-categories', SpendingCategoryViewSet, basename='spendingcategory')
+router.register(r'recurring-transactions', RecurringTransactionViewSet, basename='recurringtransaction')
 router.register(r'holdings', HoldingViewSet, basename='holding')
 router.register(r'investment-transactions', InvestmentTransactionViewSet, basename='investmenttransaction')
 

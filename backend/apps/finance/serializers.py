@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from .models import (
     Institution, Account, Transaction, SpendingCategory, 
     MonthlySpending, NetWorthSnapshot, PlaidWebhook,
-    Security, Holding, InvestmentTransaction
+    Security, Holding, InvestmentTransaction, RecurringTransaction
 )
 
 
@@ -449,4 +449,34 @@ class DashboardSerializer(serializers.Serializer):
     recent_transactions = TransactionSerializer(many=True)
     spending_by_category = serializers.ListField()
     monthly_cash_flow = serializers.DictField()
-    net_worth_trend = NetWorthSnapshotSerializer(many=True) 
+    net_worth_trend = NetWorthSnapshotSerializer(many=True)
+
+
+class RecurringTransactionSerializer(serializers.ModelSerializer):
+    """Serializer for RecurringTransaction model"""
+    category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
+    category_color = serializers.CharField(source='category.color', read_only=True, allow_null=True)
+    category_icon = serializers.CharField(source='category.icon', read_only=True, allow_null=True)
+    frequency_display = serializers.CharField(source='get_frequency_display', read_only=True)
+    monthly_amount = serializers.SerializerMethodField()
+    is_due_soon = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = RecurringTransaction
+        fields = [
+            'id', 'name', 'amount', 'is_income', 'frequency', 'frequency_display',
+            'start_date', 'next_date', 'end_date',
+            'category', 'category_name', 'category_color', 'category_icon',
+            'is_active', 'is_auto_detected', 'notes', 'merchant_name',
+            'monthly_amount', 'is_due_soon',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'is_auto_detected']
+    
+    def get_monthly_amount(self, obj):
+        """Calculate monthly equivalent amount"""
+        return round(obj.monthly_amount, 2)
+    
+    def get_is_due_soon(self, obj):
+        """Check if due within next 7 days"""
+        return obj.is_due_soon
