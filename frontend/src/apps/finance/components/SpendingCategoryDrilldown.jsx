@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Pie } from 'react-chartjs-2';
-import { Box, Typography, Breadcrumbs, Link, Chip, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, Breadcrumbs, Link, IconButton, Tooltip } from '@mui/material';
 import { Home as HomeIcon, ArrowBack as BackIcon } from '@mui/icons-material';
 import styled from 'styled-components';
-import api from '../services/api';
 
 const DrilldownContainer = styled(Box)`
   display: flex;
@@ -27,7 +26,7 @@ const ChartWrapper = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 250px;
+  min-height: 200px;
   position: relative;
 `;
 
@@ -35,7 +34,7 @@ const CategoryLegend = styled(Box)`
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 150px;
+  max-height: 120px;
   overflow-y: auto;
   margin-top: 8px;
   padding: 8px;
@@ -49,11 +48,11 @@ const LegendItem = styled(Box)`
   justify-content: space-between;
   padding: 4px 8px;
   border-radius: 4px;
-  cursor: ${props => props.clickable ? 'pointer' : 'default'};
+  cursor: pointer;
   transition: background 0.2s;
   
   &:hover {
-    background: ${props => props.clickable ? 'rgba(99, 102, 241, 0.2)' : 'transparent'};
+    background: rgba(99, 102, 241, 0.2);
   }
 `;
 
@@ -65,149 +64,150 @@ const ColorDot = styled(Box)`
   flex-shrink: 0;
 `;
 
-const SpendingCategoryDrilldown = ({ dateRange, onCategorySelect }) => {
-    const [hierarchicalCategories, setHierarchicalCategories] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+// Define category hierarchy based on Plaid categories
+const CATEGORY_HIERARCHY = {
+    'FOOD_AND_DRINK': {
+        name: 'Food & Drink',
+        children: ['RESTAURANTS', 'FAST_FOOD', 'COFFEE_SHOP', 'GROCERIES', 'BEER_WINE_AND_LIQUOR']
+    },
+    'TRANSFER_OUT': {
+        name: 'Transfers',
+        children: ['ATM', 'BANK_FEES_AND_CHARGES', 'FINANCE_CHARGE']
+    },
+    'LOAN_PAYMENTS': {
+        name: 'Loan Payments',
+        children: ['MORTGAGE', 'STUDENT_LOAN', 'CAR_PAYMENT', 'CREDIT_CARD_PAYMENT']
+    },
+    'PERSONAL_CARE': {
+        name: 'Personal Care',
+        children: ['SPA', 'HAIR', 'GYM']
+    },
+    'RENT_AND_UTILITIES': {
+        name: 'Rent & Utilities',
+        children: ['RENT', 'ELECTRIC', 'GAS', 'WATER', 'INTERNET', 'PHONE']
+    },
+    'ENTERTAINMENT': {
+        name: 'Entertainment',
+        children: ['MOVIES', 'MUSIC', 'GAMES', 'STREAMING']
+    },
+    'SHOPPING': {
+        name: 'Shopping',
+        children: ['CLOTHING', 'ELECTRONICS', 'GENERAL_MERCHANDISE', 'ONLINE_SHOPPING']
+    },
+    'TRANSPORTATION': {
+        name: 'Transportation',
+        children: ['GAS_STATIONS', 'PARKING', 'PUBLIC_TRANSIT', 'RIDESHARE', 'CAR_RENTAL']
+    },
+    'TRAVEL': {
+        name: 'Travel',
+        children: ['AIRLINES', 'HOTELS', 'CAR_RENTAL']
+    }
+};
 
-    // Drill-down state
-    const [drillPath, setDrillPath] = useState([]); // Array of {id, name} for breadcrumb
-    const [currentLevelCategories, setCurrentLevelCategories] = useState([]);
-
+const SpendingCategoryDrilldown = ({ spendingData = [], transactions = [], onCategorySelect }) => {
+    const [drillPath, setDrillPath] = useState([]);
     const chartRef = useRef();
 
-    // Category colors
     const categoryColors = [
         '#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b',
         '#10b981', '#06b6d4', '#3b82f6', '#84cc16', '#f43f5e',
         '#14b8a6', '#a855f7', '#fb923c', '#22c55e', '#0ea5e9'
     ];
 
-    // Fetch hierarchical categories
-    useEffect(() => {
-        const fetchCategories = async () => {
-            try {
-                setLoading(true);
-                const response = await api.get('/api/finance/spending-categories/tree/');
-                const data = response.data.results || response.data;
-                setHierarchicalCategories(Array.isArray(data) ? data : []);
-                setCurrentLevelCategories(Array.isArray(data) ? data : []);
-                setError(null);
-            } catch (err) {
-                console.error('Error fetching hierarchical categories:', err);
-                setError('Failed to load categories');
-            } finally {
-                setLoading(false);
-            }
-        };
+    // Format category name for display
+    const formatCategoryName = (category) => {
+        if (!category) return 'Uncategorized';
+        return category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    };
 
-        fetchCategories();
-    }, []);
+    // Get current level data based on drill path
+    const currentData = useMemo(() => {
+        if (!spendingData || spendingData.length === 0) {
+            // If no spending data provided, calculate from transactions
+            if (!transactions || transactions.length === 0) return [];
 
-    // Prepare chart data from current level categories
+            const categoryTotals = {};
+            transactions.forEach(tx => {
+                if (tx.amount > 0) { // Only expenses
+                    const category = tx.primary_category || 'OTHER';
+                    categoryTotals[category] = (categoryTotals[category] || 0) + Math.abs(tx.amount);
+                }
+            });
+
+            return Object.entries(categoryTotals)
+                .map(([name, total]) => ({ primary_category: name, total }))
+                .sort((a, b) => b.total - a.total);
+        }
+
+        if (drillPath.length === 0) {
+            // Root level - show parent categories
+            return spendingData.filter(cat => cat.total > 0);
+        } else {
+            // Drilled into a category - try to break down by transaction details
+            const parentCategory = drillPath[drillPath.length - 1];
+
+            // Filter transactions for this category and group by merchant
+            const merchantTotals = {};
+            transactions.forEach(tx => {
+                if (tx.amount > 0 && tx.primary_category === parentCategory) {
+                    const merchant = tx.merchant_name || tx.name || 'Unknown';
+                    merchantTotals[merchant] = (merchantTotals[merchant] || 0) + Math.abs(tx.amount);
+                }
+            });
+
+            return Object.entries(merchantTotals)
+                .map(([name, total]) => ({ primary_category: name, total, isMerchant: true }))
+                .sort((a, b) => b.total - a.total)
+                .slice(0, 10); // Top 10 merchants
+        }
+    }, [spendingData, transactions, drillPath]);
+
     const chartData = useMemo(() => {
-        if (!currentLevelCategories.length) return null;
-
-        // Filter to categories with spending
-        const categoriesWithSpending = currentLevelCategories.filter(cat =>
-            (cat.total_spending || cat.current_month_spending) > 0
-        );
-
-        if (!categoriesWithSpending.length) return null;
+        if (!currentData.length) return null;
 
         return {
-            labels: categoriesWithSpending.map(cat => cat.name),
+            labels: currentData.map(cat => formatCategoryName(cat.primary_category)),
             datasets: [{
-                data: categoriesWithSpending.map(cat => cat.total_spending || cat.current_month_spending || 0),
-                backgroundColor: categoriesWithSpending.map((_, i) => categoryColors[i % categoryColors.length]),
+                data: currentData.map(cat => cat.total),
+                backgroundColor: currentData.map((_, i) => categoryColors[i % categoryColors.length]),
                 borderWidth: 2,
                 borderColor: '#1e1e2e',
                 hoverBorderColor: '#fff',
                 hoverBorderWidth: 3,
             }]
         };
-    }, [currentLevelCategories]);
+    }, [currentData]);
 
-    // Handle click on pie slice
     const handleChartClick = (event, elements) => {
         if (elements.length === 0) return;
 
         const clickedIndex = elements[0].index;
-        const categoriesWithSpending = currentLevelCategories.filter(cat =>
-            (cat.total_spending || cat.current_month_spending) > 0
-        );
-        const clickedCategory = categoriesWithSpending[clickedIndex];
+        const clickedCategory = currentData[clickedIndex];
 
         if (!clickedCategory) return;
 
-        // If category has children, drill down
-        if (clickedCategory.children && clickedCategory.children.length > 0) {
-            setDrillPath(prev => [...prev, { id: clickedCategory.id, name: clickedCategory.name }]);
-            setCurrentLevelCategories(clickedCategory.children);
+        // Only drill down if at root level and there are transactions to analyze
+        if (drillPath.length === 0 && !clickedCategory.isMerchant && transactions.length > 0) {
+            setDrillPath([clickedCategory.primary_category]);
         }
 
-        // Notify parent component
         if (onCategorySelect) {
             onCategorySelect(clickedCategory);
         }
     };
 
-    // Handle breadcrumb navigation
-    const handleBreadcrumbClick = (index) => {
-        if (index === -1) {
-            // Click on "All" - go back to root
-            setDrillPath([]);
-            setCurrentLevelCategories(hierarchicalCategories);
-        } else {
-            // Navigate to specific level
-            const newPath = drillPath.slice(0, index + 1);
-
-            // Find the category at this level
-            let categories = hierarchicalCategories;
-            for (const pathItem of newPath) {
-                const found = categories.find(c => c.id === pathItem.id);
-                if (found && found.children) {
-                    categories = found.children;
-                }
-            }
-
-            setDrillPath(newPath);
-            setCurrentLevelCategories(categories);
-        }
-    };
-
-    // Handle back button
     const handleBack = () => {
-        if (drillPath.length === 0) return;
-
-        const newPath = drillPath.slice(0, -1);
-
-        if (newPath.length === 0) {
-            setCurrentLevelCategories(hierarchicalCategories);
-        } else {
-            // Navigate to parent level
-            let categories = hierarchicalCategories;
-            for (const pathItem of newPath) {
-                const found = categories.find(c => c.id === pathItem.id);
-                if (found && found.children) {
-                    categories = found.children;
-                }
-            }
-            setCurrentLevelCategories(categories);
+        if (drillPath.length > 0) {
+            setDrillPath(prev => prev.slice(0, -1));
         }
-
-        setDrillPath(newPath);
     };
 
-    // Chart options with click handler
     const chartOptions = {
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 300 },
         plugins: {
-            legend: {
-                display: false, // We'll use custom legend
-            },
+            legend: { display: false },
             tooltip: {
                 callbacks: {
                     label: (context) => {
@@ -222,41 +222,10 @@ const SpendingCategoryDrilldown = ({ dateRange, onCategorySelect }) => {
         onClick: handleChartClick,
     };
 
-    // Calculate totals for legend
-    const totalSpending = useMemo(() => {
-        return currentLevelCategories.reduce(
-            (sum, cat) => sum + (cat.total_spending || cat.current_month_spending || 0),
-            0
-        );
-    }, [currentLevelCategories]);
-
-    if (loading) {
-        return (
-            <DrilldownContainer>
-                <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                    Loading categories...
-                </Typography>
-            </DrilldownContainer>
-        );
-    }
-
-    if (error) {
-        return (
-            <DrilldownContainer>
-                <Typography color="error" sx={{ textAlign: 'center', py: 4 }}>
-                    {error}
-                </Typography>
-            </DrilldownContainer>
-        );
-    }
-
-    const categoriesWithSpending = currentLevelCategories.filter(cat =>
-        (cat.total_spending || cat.current_month_spending) > 0
-    );
+    const totalSpending = currentData.reduce((sum, cat) => sum + (cat.total || 0), 0);
 
     return (
         <DrilldownContainer>
-            {/* Breadcrumb Navigation */}
             {drillPath.length > 0 && (
                 <BreadcrumbContainer>
                     <Tooltip title="Go back">
@@ -268,32 +237,21 @@ const SpendingCategoryDrilldown = ({ dateRange, onCategorySelect }) => {
                         <Link
                             component="button"
                             underline="hover"
-                            onClick={() => handleBreadcrumbClick(-1)}
+                            onClick={() => setDrillPath([])}
                             sx={{ color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 0.5 }}
                         >
                             <HomeIcon fontSize="small" />
-                            All
+                            All Categories
                         </Link>
-                        {drillPath.map((item, index) => (
-                            <Link
-                                key={item.id}
-                                component="button"
-                                underline="hover"
-                                onClick={() => handleBreadcrumbClick(index)}
-                                sx={{
-                                    color: index === drillPath.length - 1 ? '#fff' : '#6366f1',
-                                    cursor: 'pointer',
-                                    fontWeight: index === drillPath.length - 1 ? 600 : 400
-                                }}
-                            >
-                                {item.name}
-                            </Link>
+                        {drillPath.map((cat, index) => (
+                            <Typography key={index} sx={{ color: '#fff', fontWeight: 600, fontSize: '0.85rem' }}>
+                                {formatCategoryName(cat)}
+                            </Typography>
                         ))}
                     </Breadcrumbs>
                 </BreadcrumbContainer>
             )}
 
-            {/* Chart */}
             <ChartWrapper>
                 {chartData ? (
                     <Pie ref={chartRef} data={chartData} options={chartOptions} />
@@ -302,41 +260,32 @@ const SpendingCategoryDrilldown = ({ dateRange, onCategorySelect }) => {
                 )}
             </ChartWrapper>
 
-            {/* Custom Legend */}
-            {categoriesWithSpending.length > 0 && (
+            {currentData.length > 0 && (
                 <CategoryLegend>
-                    {categoriesWithSpending.map((cat, index) => {
-                        const spending = cat.total_spending || cat.current_month_spending || 0;
-                        const percentage = totalSpending > 0 ? ((spending / totalSpending) * 100).toFixed(1) : 0;
-                        const hasChildren = cat.children && cat.children.length > 0;
+                    {currentData.slice(0, 8).map((cat, index) => {
+                        const percentage = totalSpending > 0 ? ((cat.total / totalSpending) * 100).toFixed(1) : 0;
+                        const canDrillDown = drillPath.length === 0 && !cat.isMerchant && transactions.length > 0;
 
                         return (
                             <LegendItem
-                                key={cat.id}
-                                clickable={hasChildren}
+                                key={cat.primary_category}
                                 onClick={() => {
-                                    if (hasChildren) {
-                                        setDrillPath(prev => [...prev, { id: cat.id, name: cat.name }]);
-                                        setCurrentLevelCategories(cat.children);
+                                    if (canDrillDown) {
+                                        setDrillPath([cat.primary_category]);
                                     }
                                 }}
                             >
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <ColorDot color={categoryColors[index % categoryColors.length]} />
                                     <Typography variant="body2" sx={{ color: '#fff', fontSize: '0.8rem' }}>
-                                        {cat.icon && <span style={{ marginRight: 4 }}>{cat.icon}</span>}
-                                        {cat.name}
-                                        {hasChildren && (
-                                            <Chip
-                                                label={`${cat.children.length}`}
-                                                size="small"
-                                                sx={{ ml: 1, height: 16, fontSize: '0.65rem', bgcolor: 'rgba(99, 102, 241, 0.3)' }}
-                                            />
+                                        {formatCategoryName(cat.primary_category)}
+                                        {canDrillDown && (
+                                            <span style={{ opacity: 0.5, marginLeft: 4 }}>→</span>
                                         )}
                                     </Typography>
                                 </Box>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}>
-                                    ${spending.toLocaleString()} ({percentage}%)
+                                    ${cat.total.toLocaleString()} ({percentage}%)
                                 </Typography>
                             </LegendItem>
                         );

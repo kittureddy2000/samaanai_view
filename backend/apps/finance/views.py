@@ -681,6 +681,47 @@ class RecurringTransactionViewSet(viewsets.ModelViewSet):
             'upcoming_count': len(upcoming),
             'upcoming': upcoming_serializer.data
         })
+    
+    @action(detail=False, methods=['post'])
+    def detect_patterns(self, request):
+        """Auto-detect recurring transactions from transaction history"""
+        from .services import RecurringTransactionDetectionService
+        
+        detection_service = RecurringTransactionDetectionService()
+        
+        # auto_create defaults to True - creates the recurring transactions
+        auto_create = request.data.get('auto_create', True)
+        min_occurrences = request.data.get('min_occurrences', 3)
+        
+        patterns = detection_service.create_recurring_transactions(
+            user=request.user,
+            auto_create=auto_create
+        )
+        
+        # Serialize the patterns for response (exclude transaction objects)
+        serialized_patterns = []
+        for p in patterns:
+            serialized_patterns.append({
+                'merchant': p['merchant'],
+                'amount': p['amount'],
+                'frequency': p['frequency'],
+                'occurrences': p['occurrences'],
+                'first_date': p['first_date'].isoformat(),
+                'last_date': p['last_date'].isoformat(),
+                'primary_category': p.get('primary_category'),
+                'existing_id': p.get('existing_id'),
+                'created_id': p.get('created_id'),
+            })
+        
+        created_count = sum(1 for p in patterns if p.get('created_id'))
+        existing_count = sum(1 for p in patterns if p.get('existing_id'))
+        
+        return Response({
+            'patterns_detected': len(patterns),
+            'created_count': created_count,
+            'existing_count': existing_count,
+            'patterns': serialized_patterns
+        })
 
 
 class HoldingViewSet(viewsets.ReadOnlyModelViewSet):

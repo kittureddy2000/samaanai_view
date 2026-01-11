@@ -37,7 +37,8 @@ import {
   Repeat as RepeatIcon,
   TrendingUp as IncomeIcon,
   TrendingDown as ExpenseIcon,
-  Warning as DueSoonIcon
+  Warning as DueSoonIcon,
+  AutoAwesome as AutoIcon
 } from '@mui/icons-material';
 import styled from 'styled-components';
 import api from '../../services/api';
@@ -66,6 +67,7 @@ const RecurringSettings = () => {
   const [categories, setCategories] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -198,6 +200,25 @@ const RecurringSettings = () => {
     }
   };
 
+  const handleDetectPatterns = async () => {
+    try {
+      setDetecting(true);
+      setError(null);
+      const response = await api.post('/api/finance/recurring-transactions/detect_patterns/', {
+        auto_create: true
+      });
+      const { created_count, patterns_detected } = response.data;
+      setSuccess(`Detected ${patterns_detected} recurring patterns. Created ${created_count} new entries.`);
+      loadData();
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      console.error('Error detecting patterns:', err);
+      setError('Failed to detect recurring transactions');
+    } finally {
+      setDetecting(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
@@ -265,13 +286,23 @@ const RecurringSettings = () => {
             Manage your recurring transactions and subscriptions
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add Recurring
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            startIcon={detecting ? <CircularProgress size={16} /> : <AutoIcon />}
+            onClick={handleDetectPatterns}
+            disabled={detecting}
+          >
+            {detecting ? 'Detecting...' : 'Detect Recurring'}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+          >
+            Add Recurring
+          </Button>
+        </Box>
       </Box>
 
       <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e5e7eb' }}>

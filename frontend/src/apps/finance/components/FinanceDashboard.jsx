@@ -1042,10 +1042,10 @@ const FinanceDashboard = ({ accounts, loading }) => {
               <ChartTitle>Category Breakdown (Click to drill down)</ChartTitle>
               <ChartContainer ref={categoryPieContainerRef}>
                 <SpendingCategoryDrilldown
-                  dateRange={dateRange}
+                  spendingData={dashboard?.spending_by_category || []}
+                  transactions={dashboard?.recent_transactions || []}
                   onCategorySelect={(category) => {
                     console.log('Selected category:', category);
-                    // Optionally filter transactions by this category
                   }}
                 />
               </ChartContainer>

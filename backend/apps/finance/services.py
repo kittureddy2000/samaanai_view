@@ -790,4 +790,265 @@ class AnalyticsService:
             'expenses': expenses,
             'net_cash_flow': abs(income) - expenses,
             'savings_rate': (abs(income) - expenses) / abs(income) * 100 if income else 0,
-        } 
+        }
+
+
+class RecurringTransactionDetectionService:
+    """Service for auto-detecting recurring transactions from transaction history"""
+    
+    def detect_recurring_transactions(self, user, min_occurrences=3, lookback_days=365):
+        """
+        Analyze transaction history and detect recurring patterns.
+        
+        Criteria for detecting recurring transactions:
+        - Same merchant/vendor name (normalized)
+        - Similar amount (within 5% tolerance)
+        - Appears 3+ times in the lookback period
+        - Transactions are approximately evenly spaced
+        """
+        from .models import Transaction, RecurringTransaction, SpendingCategory
+        from django.db.models import Count, Avg, StdDev
+        from collections import defaultdict
+        from datetime import timedelta
+        import re
+        
+        logger.info(f"Starting recurring transaction detection for user {user.id}")
+        
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=lookback_days)
+        
+        # Get all expense transactions in the lookback period
+        transactions = Transaction.objects.filter(
+            account__institution__user=user,
+            date__gte=start_date,
+            date__lte=end_date,
+            amount__gt=0,  # Only expenses
+        ).order_by('date')
+        
+        # Group transactions by normalized merchant/amount
+        pattern_groups = defaultdict(list)
+        
+        for tx in transactions:
+            # Normalize merchant name
+            merchant = self._normalize_merchant_name(tx.merchant_name or tx.name)
+            if not merchant or merchant == 'unknown':
+                continue
+            
+            # Round amount to nearest dollar for grouping
+            rounded_amount = round(float(tx.amount))
+            if rounded_amount <= 0:
+                continue
+            
+            key = f"{merchant}|{rounded_amount}"
+            pattern_groups[key].append(tx)
+        
+        # Analyze each group for recurring patterns
+        detected_recurring = []
+        
+        for key, txs in pattern_groups.items():
+            if len(txs) < min_occurrences:
+                continue
+            
+            merchant, amount_str = key.split('|')
+            amount = float(amount_str)
+            
+            # Check if transactions are evenly spaced (monthly pattern)
+            frequency = self._detect_frequency(txs)
+            if not frequency:
+                continue
+            
+            # Calculate average amount across occurrences
+            avg_amount = sum(float(tx.amount) for tx in txs) / len(txs)
+            
+            detected_recurring.append({
+                'merchant': self._format_merchant_name(merchant),
+                'amount': round(avg_amount, 2),
+                'frequency': frequency,
+                'occurrences': len(txs),
+                'first_date': txs[0].date,
+                'last_date': txs[-1].date,
+                'transactions': txs,
+                'primary_category': txs[0].primary_category,
+            })
+        
+        logger.info(f"Detected {len(detected_recurring)} recurring transaction patterns")
+        return detected_recurring
+    
+    def create_recurring_transactions(self, user, auto_create=False):
+        """
+        Detect and optionally create RecurringTransaction records for the user.
+        Returns list of detected patterns.
+        """
+        from .models import RecurringTransaction, SpendingCategory
+        from dateutil.relativedelta import relativedelta
+        
+        patterns = self.detect_recurring_transactions(user)
+        created_count = 0
+        
+        for pattern in patterns:
+            # Check if similar recurring transaction already exists
+            existing = RecurringTransaction.objects.filter(
+                user=user,
+                merchant_name__iexact=pattern['merchant'],
+                amount__gte=pattern['amount'] * 0.95,
+                amount__lte=pattern['amount'] * 1.05,
+            ).first()
+            
+            if existing:
+                # Update existing with is_auto_detected flag
+                if not existing.is_auto_detected:
+                    existing.is_auto_detected = True
+                    existing.save()
+                pattern['existing_id'] = str(existing.id)
+                continue
+            
+            if auto_create:
+                # Calculate next expected date
+                last_date = pattern['last_date']
+                frequency = pattern['frequency']
+                
+                if frequency == 'monthly':
+                    next_date = last_date + relativedelta(months=1)
+                elif frequency == 'weekly':
+                    next_date = last_date + timedelta(days=7)
+                elif frequency == 'bi_weekly':
+                    next_date = last_date + timedelta(days=14)
+                elif frequency == 'quarterly':
+                    next_date = last_date + relativedelta(months=3)
+                elif frequency == 'yearly':
+                    next_date = last_date + relativedelta(years=1)
+                else:
+                    next_date = last_date + relativedelta(months=1)
+                
+                # Adjust next_date if it's in the past
+                while next_date < timezone.now().date():
+                    if frequency == 'monthly':
+                        next_date = next_date + relativedelta(months=1)
+                    elif frequency == 'weekly':
+                        next_date = next_date + timedelta(days=7)
+                    elif frequency == 'bi_weekly':
+                        next_date = next_date + timedelta(days=14)
+                    elif frequency == 'quarterly':
+                        next_date = next_date + relativedelta(months=3)
+                    elif frequency == 'yearly':
+                        next_date = next_date + relativedelta(years=1)
+                    else:
+                        next_date = next_date + relativedelta(months=1)
+                
+                # Try to match category
+                category = None
+                if pattern['primary_category']:
+                    category = SpendingCategory.objects.filter(
+                        user=user,
+                        name__icontains=pattern['primary_category'].replace('_', ' ')
+                    ).first()
+                
+                # Create the recurring transaction
+                recurring = RecurringTransaction.objects.create(
+                    user=user,
+                    name=pattern['merchant'],
+                    amount=pattern['amount'],
+                    frequency=frequency,
+                    start_date=pattern['first_date'],
+                    next_date=next_date,
+                    category=category,
+                    merchant_name=pattern['merchant'],
+                    is_active=True,
+                    is_auto_detected=True,
+                    notes=f"Auto-detected from {pattern['occurrences']} transactions",
+                )
+                pattern['created_id'] = str(recurring.id)
+                created_count += 1
+        
+        logger.info(f"Created {created_count} new recurring transaction records")
+        return patterns
+    
+    def _normalize_merchant_name(self, name):
+        """Normalize merchant name for grouping"""
+        if not name:
+            return 'unknown'
+        
+        # Convert to lowercase
+        name = name.lower().strip()
+        
+        # Remove common suffixes and numbers
+        name = re.sub(r'\s*(#\d+|\d{4,}|store\s*\d+|loc\s*\d+).*$', '', name)
+        
+        # Remove special characters but keep spaces and basic punctuation
+        name = re.sub(r'[^\w\s\'-]', '', name)
+        
+        # Normalize whitespace
+        name = re.sub(r'\s+', ' ', name).strip()
+        
+        # Truncate to first 40 chars for grouping
+        if len(name) > 40:
+            name = name[:40]
+        
+        return name
+    
+    def _format_merchant_name(self, name):
+        """Format merchant name for display"""
+        if not name:
+            return 'Unknown'
+        
+        # Title case but preserve common abbreviations
+        words = name.split()
+        formatted = []
+        for word in words:
+            if word.upper() in ['ATM', 'LLC', 'INC', 'CO', 'LTD']:
+                formatted.append(word.upper())
+            else:
+                formatted.append(word.capitalize())
+        
+        return ' '.join(formatted)
+    
+    def _detect_frequency(self, transactions):
+        """
+        Analyze transaction dates to determine frequency.
+        Returns frequency string or None if pattern is irregular.
+        """
+        from statistics import mean, stdev
+        
+        if len(transactions) < 3:
+            return None
+        
+        # Calculate intervals between consecutive transactions
+        intervals = []
+        sorted_txs = sorted(transactions, key=lambda x: x.date)
+        
+        for i in range(1, len(sorted_txs)):
+            delta = (sorted_txs[i].date - sorted_txs[i-1].date).days
+            intervals.append(delta)
+        
+        if not intervals:
+            return None
+        
+        avg_interval = mean(intervals)
+        
+        # Determine frequency based on average interval
+        # Allow some variance for human billing cycles
+        if 6 <= avg_interval <= 8:
+            return 'weekly'
+        elif 13 <= avg_interval <= 16:
+            return 'bi_weekly'
+        elif 27 <= avg_interval <= 33:
+            return 'monthly'
+        elif 85 <= avg_interval <= 100:
+            return 'quarterly'
+        elif 180 <= avg_interval <= 200:
+            return 'semi_annually'
+        elif 350 <= avg_interval <= 380:
+            return 'yearly'
+        
+        # If interval is less than 40 days and appears regularly, consider monthly
+        if avg_interval < 40 and len(intervals) >= 2:
+            # Check if variance is acceptable (within 25%)
+            try:
+                interval_stdev = stdev(intervals)
+                if interval_stdev / avg_interval < 0.25:
+                    return 'monthly'
+            except:
+                pass
+        
+        return None
+
