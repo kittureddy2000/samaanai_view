@@ -17,6 +17,7 @@ import { TextField, Box, Select, MenuItem, InputLabel, FormControl, Grid, Paper,
 import api, { FINANCE_BASE_PATH, getInstitutions, getAccounts, getSpendingCategories, getDashboardData } from '../services/api';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import * as XLSX from 'xlsx';
+import SpendingCategoryDrilldown from './SpendingCategoryDrilldown';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend);
 
@@ -1038,9 +1039,15 @@ const FinanceDashboard = ({ accounts, loading }) => {
 
           <TileWrapper>
             <WidgetCard sx={{ height: '420px !important', width: '100%', minHeight: '420px' }}>
-              <ChartTitle>Category Breakdown</ChartTitle>
+              <ChartTitle>Category Breakdown (Click to drill down)</ChartTitle>
               <ChartContainer ref={categoryPieContainerRef}>
-                {renderChart(Pie, spendingPieData, pieChartOptions, categoryPieRef, categoryPieContainerRef, `category-pie-${JSON.stringify(filters)}-${dateRange.start}-${dateRange.end}`)}
+                <SpendingCategoryDrilldown
+                  dateRange={dateRange}
+                  onCategorySelect={(category) => {
+                    console.log('Selected category:', category);
+                    // Optionally filter transactions by this category
+                  }}
+                />
               </ChartContainer>
             </WidgetCard>
           </TileWrapper>
