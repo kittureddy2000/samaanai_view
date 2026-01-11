@@ -119,42 +119,141 @@ class TransactionSerializer(serializers.ModelSerializer):
 
 
 class SpendingCategorySerializer(serializers.ModelSerializer):
-    """Serializer for SpendingCategory model"""
+    """Serializer for SpendingCategory model with hierarchical support"""
+    parent_id = serializers.UUIDField(source='parent.id', read_only=True, allow_null=True)
+    parent_name = serializers.CharField(source='parent.name', read_only=True, allow_null=True)
+    is_parent = serializers.SerializerMethodField()
+    is_child = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
+    children_count = serializers.SerializerMethodField()
     current_month_spending = serializers.SerializerMethodField()
+    total_spending = serializers.SerializerMethodField()  # Includes children
     budget_remaining = serializers.SerializerMethodField()
     
     class Meta:
         model = SpendingCategory
         fields = [
             'id', 'name', 'icon', 'color', 'monthly_budget',
-            'plaid_categories', 'current_month_spending', 'budget_remaining',
-            'created_at', 'updated_at'
+            'parent', 'parent_id', 'parent_name',
+            'is_parent', 'is_child', 'level', 'children_count',
+            'plaid_categories', 'current_month_spending', 'total_spending',
+            'budget_remaining', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
+    def get_is_parent(self, obj):
+        """Returns True if this category has children"""
+        return obj.subcategories.exists()
+    
+    def get_is_child(self, obj):
+        """Returns True if this category has a parent"""
+        return obj.parent is not None
+    
+    def get_level(self, obj):
+        """Returns the depth level of this category (0 for root)"""
+        return obj.level
+    
+    def get_children_count(self, obj):
+        """Returns the number of direct children"""
+        return obj.subcategories.count()
+    
     def get_current_month_spending(self, obj):
-        """Get current month's spending for this category"""
+        """Get current month's spending for this category only"""
         from django.utils import timezone
         now = timezone.now()
         
         try:
             monthly = obj.monthly_totals.get(year=now.year, month=now.month)
-            return monthly.amount_spent
+            return float(monthly.amount_spent)
         except MonthlySpending.DoesNotExist:
             return 0
+    
+    def get_total_spending(self, obj):
+        """Get current month's spending including all children"""
+        from django.utils import timezone
+        now = timezone.now()
+        
+        total = 0
+        # Add this category's spending
+        try:
+            monthly = obj.monthly_totals.get(year=now.year, month=now.month)
+            total += float(monthly.amount_spent)
+        except MonthlySpending.DoesNotExist:
+            pass
+        
+        # Add all descendants' spending
+        for descendant in obj.get_descendants():
+            try:
+                monthly = descendant.monthly_totals.get(year=now.year, month=now.month)
+                total += float(monthly.amount_spent)
+            except MonthlySpending.DoesNotExist:
+                pass
+        
+        return total
     
     def get_budget_remaining(self, obj):
         """Calculate remaining budget for current month"""
         if not obj.monthly_budget:
             return None
         
-        spent = self.get_current_month_spending(obj)
-        remaining = obj.monthly_budget - spent
+        spent = self.get_total_spending(obj)
+        remaining = float(obj.monthly_budget) - spent
         return {
             'amount': remaining,
-            'percentage': (remaining / obj.monthly_budget * 100) if obj.monthly_budget else 0,
+            'percentage': (remaining / float(obj.monthly_budget) * 100) if obj.monthly_budget else 0,
             'is_over': remaining < 0
         }
+
+
+class SpendingCategoryTreeSerializer(serializers.ModelSerializer):
+    """Serializer for hierarchical tree view of categories"""
+    children = serializers.SerializerMethodField()
+    total_spending = serializers.SerializerMethodField()
+    current_month_spending = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = SpendingCategory
+        fields = [
+            'id', 'name', 'icon', 'color', 'monthly_budget',
+            'current_month_spending', 'total_spending', 'children'
+        ]
+    
+    def get_children(self, obj):
+        """Recursively serialize children"""
+        children = obj.subcategories.all()
+        return SpendingCategoryTreeSerializer(children, many=True).data
+    
+    def get_current_month_spending(self, obj):
+        """Get this category's spending only"""
+        from django.utils import timezone
+        now = timezone.now()
+        
+        try:
+            monthly = obj.monthly_totals.get(year=now.year, month=now.month)
+            return float(monthly.amount_spent)
+        except MonthlySpending.DoesNotExist:
+            return 0
+    
+    def get_total_spending(self, obj):
+        """Get spending including all children"""
+        from django.utils import timezone
+        now = timezone.now()
+        
+        total = 0
+        try:
+            monthly = obj.monthly_totals.get(year=now.year, month=now.month)
+            total += float(monthly.amount_spent)
+        except MonthlySpending.DoesNotExist:
+            pass
+        
+        for descendant in obj.get_descendants():
+            try:
+                monthly = descendant.monthly_totals.get(year=now.year, month=now.month)
+                total += float(monthly.amount_spent)
+            except MonthlySpending.DoesNotExist:
+                pass
+        
+        return total
 
 
 class MonthlySpendingSerializer(serializers.ModelSerializer):

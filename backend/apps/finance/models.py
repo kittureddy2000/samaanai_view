@@ -220,12 +220,21 @@ class Transaction(models.Model):
 
 
 class SpendingCategory(models.Model):
-    """User-defined spending categories for budgeting"""
+    """User-defined spending categories for budgeting with hierarchical support"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='spending_categories')
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=50, blank=True, null=True)  # Icon name or emoji
     color = models.CharField(max_length=7, default='#6B7280')  # Hex color
+    
+    # Hierarchical support - parent category (null for top-level categories)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='subcategories'
+    )
     
     # Budget info
     monthly_budget = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -242,7 +251,55 @@ class SpendingCategory(models.Model):
         ordering = ['name']
     
     def __str__(self):
+        if self.parent:
+            return f"{self.parent.name} > {self.name}"
         return self.name
+    
+    @property
+    def children(self):
+        """Returns direct child categories"""
+        return self.subcategories.all()
+    
+    @property
+    def is_parent(self):
+        """Returns True if this category has children"""
+        return self.subcategories.exists()
+    
+    @property
+    def is_child(self):
+        """Returns True if this category has a parent"""
+        return self.parent is not None
+    
+    def get_descendants(self, include_self=False):
+        """Returns all descendant categories recursively"""
+        descendants = []
+        if include_self:
+            descendants.append(self)
+        for child in self.subcategories.all():
+            descendants.append(child)
+            descendants.extend(child.get_descendants())
+        return descendants
+    
+    def get_ancestors(self, include_self=False):
+        """Returns all ancestor categories up to root"""
+        ancestors = []
+        if include_self:
+            ancestors.append(self)
+        parent = self.parent
+        while parent:
+            ancestors.append(parent)
+            parent = parent.parent
+        return ancestors
+    
+    @property
+    def level(self):
+        """Returns the depth level of this category (0 for root)"""
+        level = 0
+        parent = self.parent
+        while parent:
+            level += 1
+            parent = parent.parent
+        return level
 
 
 class MonthlySpending(models.Model):

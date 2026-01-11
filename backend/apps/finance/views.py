@@ -589,15 +589,45 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class SpendingCategoryViewSet(viewsets.ModelViewSet):
-    """ViewSet for spending categories"""
+    """ViewSet for spending categories with hierarchical support"""
     serializer_class = SpendingCategorySerializer
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        return SpendingCategory.objects.filter(user=self.request.user)
+        queryset = SpendingCategory.objects.filter(user=self.request.user)
+        
+        # Filter by parent status
+        parent_only = self.request.query_params.get('parent_only')
+        if parent_only == 'true':
+            queryset = queryset.filter(parent__isnull=True)
+        
+        children_only = self.request.query_params.get('children_only')
+        if children_only == 'true':
+            queryset = queryset.filter(parent__isnull=False)
+        
+        # Filter by specific parent
+        parent_id = self.request.query_params.get('parent_id')
+        if parent_id:
+            queryset = queryset.filter(parent_id=parent_id)
+        
+        return queryset.select_related('parent')
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def tree(self, request):
+        """Get hierarchical tree of categories (root categories with nested children)"""
+        from .serializers import SpendingCategoryTreeSerializer
+        
+        # Get only root categories (no parent)
+        root_categories = SpendingCategory.objects.filter(
+            user=request.user,
+            parent__isnull=True
+        ).prefetch_related('subcategories')
+        
+        serializer = SpendingCategoryTreeSerializer(root_categories, many=True)
+        return Response(serializer.data)
 
 
 class HoldingViewSet(viewsets.ReadOnlyModelViewSet):
