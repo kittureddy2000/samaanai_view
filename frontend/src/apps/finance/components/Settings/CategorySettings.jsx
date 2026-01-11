@@ -23,38 +23,124 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  CircularProgress
+  CircularProgress,
+  Collapse,
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   MonetizationOn as BudgetIcon,
-  Category as CategoryIcon
+  Category as CategoryIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  SubdirectoryArrowRight as SubcategoryIcon
 } from '@mui/icons-material';
 import styled from 'styled-components';
 import api from '../../services/api';
 
+const SettingsContainer = styled(Box)`
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+`;
+
+const SettingsSection = styled(Box)`
+  margin-bottom: 32px;
+`;
+
+const SummarySection = styled(Box)`
+  margin-bottom: 24px;
+`;
+
+const SectionHeader = styled(Box)`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+`;
+
+const SectionTitle = styled(Typography)`
+  font-weight: 600;
+  color: #1e293b;
+`;
+
+const BudgetCard = styled(Paper)`
+  padding: 16px;
+  text-align: center;
+  flex: 1;
+`;
+
+const ColorDot = styled(Box)`
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: ${props => props.color || '#6B7280'};
+  flex-shrink: 0;
+`;
+
+const SaveButtonContainer = styled(Box)`
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 24px;
+`;
+
+const ColorOption = styled(Box)`
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 3px solid ${props => props.selected ? '#1e293b' : 'transparent'};
+  background-color: ${props => props.color};
+  transition: transform 0.2s;
+  
+  &:hover {
+    transform: scale(1.1);
+  }
+`;
+
+const ChildRow = styled(TableRow)`
+  background-color: #f8fafc;
+`;
+
 const CategorySettings = () => {
   const [categories, setCategories] = useState([]);
+  const [treeCategories, setTreeCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [expandedCategories, setExpandedCategories] = useState({});
   const [newCategory, setNewCategory] = useState({
     name: '',
     monthly_budget: 0,
     color: '#3498db',
-    icon: ''
+    icon: '',
+    parent: null
   });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+  const [parentCategories, setParentCategories] = useState([]);
 
+  // Load categories using tree endpoint
   const loadCategories = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/finance/spending-categories/');
-      const cats = response.data.results || response.data;
-      setCategories(Array.isArray(cats) ? cats : []);
+      // Fetch hierarchical tree
+      const treeResponse = await api.get('/api/finance/spending-categories/tree/');
+      const treeData = treeResponse.data.results || treeResponse.data;
+      setTreeCategories(Array.isArray(treeData) ? treeData : []);
+
+      // Also fetch flat list for parent selector
+      const flatResponse = await api.get('/api/finance/spending-categories/?parent_only=true');
+      const flatData = flatResponse.data.results || flatResponse.data;
+      setParentCategories(Array.isArray(flatData) ? flatData : []);
+
+      // Keep flat list for totals
+      const allResponse = await api.get('/api/finance/spending-categories/');
+      const allData = allResponse.data.results || allResponse.data;
+      setCategories(Array.isArray(allData) ? allData : []);
+
       setError('');
     } catch (error) {
       console.error('Error loading categories:', error);
@@ -64,24 +150,8 @@ const CategorySettings = () => {
     }
   };
 
-  // Load categories on component mount
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get('/api/finance/spending-categories/');
-        const cats = response.data.results || response.data;
-        setCategories(Array.isArray(cats) ? cats : []);
-        setError('');
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-        setError('Failed to load categories');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCategories();
+    loadCategories();
   }, []);
 
   const handleSave = () => {
@@ -89,9 +159,15 @@ const CategorySettings = () => {
     setTimeout(() => setSaved(false), 3000);
   };
 
-  const handleAddCategory = () => {
+  const handleAddCategory = (parentId = null) => {
     setEditingCategory(null);
-    setNewCategory({ name: '', monthly_budget: 0, color: '#3498db', icon: '' });
+    setNewCategory({
+      name: '',
+      monthly_budget: 0,
+      color: '#3498db',
+      icon: '',
+      parent: parentId
+    });
     setOpenDialog(true);
   };
 
@@ -101,16 +177,17 @@ const CategorySettings = () => {
       name: category.name,
       monthly_budget: category.monthly_budget || 0,
       color: category.color || '#3498db',
-      icon: category.icon || ''
+      icon: category.icon || '',
+      parent: category.parent || null
     });
     setOpenDialog(true);
   };
 
   const handleDeleteCategory = async (categoryId) => {
-    if (window.confirm('Are you sure you want to delete this category?')) {
+    if (window.confirm('Are you sure you want to delete this category? All subcategories will also be deleted.')) {
       try {
         await api.delete(`/api/finance/spending-categories/${categoryId}/`);
-        setCategories(prev => prev.filter(cat => cat.id !== categoryId));
+        loadCategories();
         handleSave();
       } catch (error) {
         console.error('Error deleting category:', error);
@@ -122,17 +199,12 @@ const CategorySettings = () => {
   const handleSaveCategory = async () => {
     try {
       if (editingCategory) {
-        // Update existing category
-        const response = await api.patch(`/api/finance/spending-categories/${editingCategory.id}/`, newCategory);
-        setCategories(prev => prev.map(cat =>
-          cat.id === editingCategory.id ? response.data : cat
-        ));
+        await api.patch(`/api/finance/spending-categories/${editingCategory.id}/`, newCategory);
       } else {
-        // Create new category
-        const response = await api.post('/api/finance/spending-categories/', newCategory);
-        setCategories(prev => [...prev, response.data]);
+        await api.post('/api/finance/spending-categories/', newCategory);
       }
       setOpenDialog(false);
+      loadCategories();
       handleSave();
     } catch (error) {
       console.error('Error saving category:', error);
@@ -140,14 +212,23 @@ const CategorySettings = () => {
     }
   };
 
+  const toggleExpand = (categoryId) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoryId]: !prev[categoryId]
+    }));
+  };
+
   const predefinedColors = [
-    '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57',
-    '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43',
-    '#6c5ce7', '#a29bfe', '#fd79a8', '#fdcb6e', '#6c5ce7'
+    '#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899',
+    '#10b981', '#06b6d4', '#a855f7', '#dc2626', '#22c55e',
+    '#6366f1', '#84cc16', '#fb923c', '#14b8a6', '#f43f5e'
   ];
 
-  const expenseCategories = categories; // All categories can have budgets
-  const totalExpenseBudget = categories.reduce((sum, cat) => sum + (parseFloat(cat.monthly_budget) || 0), 0);
+  // Calculate totals from parent categories only (they aggregate children)
+  const parentCats = categories.filter(c => !c.parent);
+  const totalBudget = parentCats.reduce((sum, cat) => sum + (parseFloat(cat.monthly_budget) || 0), 0);
+  const totalSpending = categories.reduce((sum, cat) => sum + (parseFloat(cat.current_month_spending) || 0), 0);
 
   if (loading) {
     return (
@@ -156,6 +237,122 @@ const CategorySettings = () => {
       </Box>
     );
   }
+
+  const renderCategoryRow = (category, level = 0) => {
+    const isExpanded = expandedCategories[category.id];
+    const hasChildren = category.children && category.children.length > 0;
+    const isParent = hasChildren || level === 0;
+
+    return (
+      <React.Fragment key={category.id}>
+        <TableRow
+          hover
+          sx={{
+            backgroundColor: level === 0 ? '#fff' : '#f8fafc',
+            '&:hover': { backgroundColor: level === 0 ? '#f1f5f9' : '#e2e8f0' }
+          }}
+        >
+          <TableCell>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: level * 3 }}>
+              {hasChildren && (
+                <IconButton
+                  size="small"
+                  onClick={() => toggleExpand(category.id)}
+                  sx={{ p: 0.5 }}
+                >
+                  {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </IconButton>
+              )}
+              {!hasChildren && level > 0 && (
+                <SubcategoryIcon fontSize="small" sx={{ color: '#9ca3af', ml: 0.5 }} />
+              )}
+              <ColorDot color={category.color} />
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: level === 0 ? 600 : 500 }}>
+                  {category.icon && <span style={{ marginRight: 6 }}>{category.icon}</span>}
+                  {category.name}
+                </Typography>
+                {hasChildren && (
+                  <Typography variant="caption" color="text.secondary">
+                    {category.children.length} subcategories
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          </TableCell>
+          <TableCell>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {category.monthly_budget ? `$${parseFloat(category.monthly_budget).toLocaleString()}` : '-'}
+            </Typography>
+          </TableCell>
+          <TableCell>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 500,
+                color: hasChildren ? '#1e293b' : '#059669'
+              }}
+            >
+              ${(hasChildren ? category.total_spending : category.current_month_spending)?.toLocaleString() || '0'}
+              {hasChildren && (
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  (total)
+                </Typography>
+              )}
+            </Typography>
+          </TableCell>
+          <TableCell>
+            <Box sx={{ display: 'flex', gap: 0.5 }}>
+              {level === 0 && (
+                <Tooltip title="Add subcategory">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleAddCategory(category.id)}
+                    sx={{ color: '#22c55e' }}
+                  >
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Tooltip title="Edit">
+                <IconButton
+                  size="small"
+                  onClick={() => handleEditCategory(category)}
+                  sx={{ color: '#3b82f6' }}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Delete">
+                <IconButton
+                  size="small"
+                  onClick={() => handleDeleteCategory(category.id)}
+                  sx={{ color: '#dc2626' }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </TableCell>
+        </TableRow>
+
+        {/* Render children */}
+        {hasChildren && isExpanded && (
+          <TableRow>
+            <TableCell colSpan={4} sx={{ p: 0, border: 'none' }}>
+              <Collapse in={isExpanded}>
+                <Table size="small">
+                  <TableBody>
+                    {category.children.map(child => renderCategoryRow(child, level + 1))}
+                  </TableBody>
+                </Table>
+              </Collapse>
+            </TableCell>
+          </TableRow>
+        )}
+      </React.Fragment>
+    );
+  };
 
   return (
     <SettingsContainer>
@@ -181,7 +378,7 @@ const CategorySettings = () => {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={handleAddCategory}
+              onClick={() => handleAddCategory(null)}
               size="small"
             >
               Add Category
@@ -189,41 +386,43 @@ const CategorySettings = () => {
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
-            <BudgetCard>
+            <BudgetCard elevation={0} sx={{ border: '1px solid #e5e7eb' }}>
               <Typography variant="body2" color="text.secondary">Total Monthly Budget</Typography>
               <Typography variant="h5" sx={{ fontWeight: 600, color: '#dc2626' }}>
-                ${totalExpenseBudget.toLocaleString()}
+                ${totalBudget.toLocaleString()}
               </Typography>
             </BudgetCard>
-            <BudgetCard>
+            <BudgetCard elevation={0} sx={{ border: '1px solid #e5e7eb' }}>
+              <Typography variant="body2" color="text.secondary">Current Spending</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 600, color: '#059669' }}>
+                ${totalSpending.toLocaleString()}
+              </Typography>
+            </BudgetCard>
+            <BudgetCard elevation={0} sx={{ border: '1px solid #e5e7eb' }}>
               <Typography variant="body2" color="text.secondary">Total Categories</Typography>
               <Typography variant="h5" sx={{ fontWeight: 600, color: '#1e293b' }}>
-                {categories.length}
-              </Typography>
-            </BudgetCard>
-            <BudgetCard>
-              <Typography variant="body2" color="text.secondary">With Budgets</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 600, color: '#059669' }}>
-                {categories.filter(cat => cat.monthly_budget > 0).length}
+                {treeCategories.length} parent, {categories.length} total
               </Typography>
             </BudgetCard>
           </Box>
         </Paper>
       </SummarySection>
 
-      {/* Categories */}
+      {/* Categories Tree */}
       <SettingsSection>
         <SectionHeader>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CategoryIcon sx={{ color: '#dc2626' }} />
             <SectionTitle variant="h6">Spending Categories</SectionTitle>
           </Box>
-          <Chip
-            label={`${categories.length} categories`}
+          <Button
             size="small"
-            color="primary"
-            variant="outlined"
-          />
+            onClick={() => setExpandedCategories(
+              treeCategories.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
+            )}
+          >
+            Expand All
+          </Button>
         </SectionHeader>
 
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e5e7eb' }}>
@@ -237,48 +436,7 @@ const CategorySettings = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {expenseCategories.map((category) => (
-                <TableRow key={category.id} hover>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <ColorDot color={category.color} />
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {category.name}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {category.monthly_budget ? `$${category.monthly_budget?.toLocaleString()}` : 'No budget'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: '#059669' }}>
-                      ${category.current_month_spending?.toLocaleString() || '0'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditCategory(category)}
-                        sx={{ color: '#3b82f6' }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteCategory(category.id)}
-                        sx={{ color: '#dc2626' }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {treeCategories.map(category => renderCategoryRow(category, 0))}
             </TableBody>
           </Table>
         </TableContainer>
@@ -301,8 +459,8 @@ const CategorySettings = () => {
         <DialogTitle>
           {editingCategory ? 'Edit Category' : 'Add New Category'}
         </DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
             <TextField
               label="Category Name"
               value={newCategory.name}
@@ -311,28 +469,48 @@ const CategorySettings = () => {
               required
             />
 
+            <FormControl fullWidth>
+              <InputLabel>Parent Category</InputLabel>
+              <Select
+                value={newCategory.parent || ''}
+                onChange={(e) => setNewCategory({ ...newCategory, parent: e.target.value || null })}
+                label="Parent Category"
+              >
+                <MenuItem value="">
+                  <em>None (Top-level category)</em>
+                </MenuItem>
+                {parentCategories
+                  .filter(cat => cat.id !== editingCategory?.id)
+                  .map(cat => (
+                    <MenuItem key={cat.id} value={cat.id}>
+                      {cat.icon && <span style={{ marginRight: 8 }}>{cat.icon}</span>}
+                      {cat.name}
+                    </MenuItem>
+                  ))
+                }
+              </Select>
+            </FormControl>
+
             <TextField
               label="Monthly Budget"
               type="number"
               value={newCategory.monthly_budget}
               onChange={(e) => setNewCategory({ ...newCategory, monthly_budget: parseFloat(e.target.value) || 0 })}
               fullWidth
-              InputProps={{ startAdornment: '$' }}
+              InputProps={{ startAdornment: <Typography sx={{ mr: 1 }}>$</Typography> }}
             />
 
             <TextField
-              label="Icon (optional)"
+              label="Icon (emoji)"
               value={newCategory.icon}
               onChange={(e) => setNewCategory({ ...newCategory, icon: e.target.value })}
               fullWidth
-              placeholder="💰 or icon-name"
+              placeholder="e.g., 🍔 or 🚗"
             />
 
             <Box>
-              <Typography variant="body2" sx={{ mb: 2, fontWeight: 500 }}>
-                Choose Color
-              </Typography>
-              <ColorPalette>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Color</Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 {predefinedColors.map((color) => (
                   <ColorOption
                     key={color}
@@ -341,7 +519,7 @@ const CategorySettings = () => {
                     onClick={() => setNewCategory({ ...newCategory, color })}
                   />
                 ))}
-              </ColorPalette>
+              </Box>
             </Box>
           </Box>
         </DialogContent>
@@ -352,7 +530,7 @@ const CategorySettings = () => {
             variant="contained"
             disabled={!newCategory.name.trim()}
           >
-            {editingCategory ? 'Update' : 'Add'} Category
+            {editingCategory ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -360,74 +538,4 @@ const CategorySettings = () => {
   );
 };
 
-const SettingsContainer = styled.div`
-  max-width: 1000px;
-`;
-
-const SummarySection = styled.div`
-  margin-bottom: 32px;
-`;
-
-const BudgetCard = styled(Box)`
-  padding: 16px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-`;
-
-const SettingsSection = styled.div`
-  margin-bottom: 32px;
-`;
-
-const SectionHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-`;
-
-const SectionTitle = styled(Typography)`
-  font-weight: 600 !important;
-  color: #1e293b !important;
-`;
-
-const ColorDot = styled.div`
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background-color: ${props => props.color};
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 1px #e5e7eb;
-`;
-
-const ColorPalette = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-  gap: 12px;
-  max-width: 400px;
-`;
-
-const ColorOption = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background-color: ${props => props.color};
-  border: 2px solid ${props => props.selected ? '#2563eb' : '#e5e7eb'};
-  cursor: pointer;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    transform: scale(1.1);
-    border-color: #2563eb;
-  }
-`;
-
-const SaveButtonContainer = styled.div`
-  margin-top: 40px;
-  padding-top: 24px;
-  border-top: 1px solid #e5e7eb;
-  display: flex;
-  justify-content: flex-start;
-`;
-
-export default CategorySettings; 
+export default CategorySettings;
