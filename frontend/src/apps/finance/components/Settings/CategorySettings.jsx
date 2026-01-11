@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  TextField, 
-  Button, 
+import {
+  Box,
+  Typography,
+  TextField,
+  Button,
   IconButton,
   Paper,
   Divider,
@@ -25,9 +25,9 @@ import {
   TableRow,
   CircularProgress
 } from '@mui/material';
-import { 
-  Add as AddIcon, 
-  Edit as EditIcon, 
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
   Delete as DeleteIcon,
   MonetizationOn as BudgetIcon,
   Category as CategoryIcon
@@ -52,7 +52,7 @@ const CategorySettings = () => {
   const loadCategories = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/finance/spending-categories/');
+      const response = await api.get('/api/finance/spending-categories/');
       const cats = response.data.results || response.data;
       setCategories(Array.isArray(cats) ? cats : []);
       setError('');
@@ -69,7 +69,7 @@ const CategorySettings = () => {
     const fetchCategories = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/finance/spending-categories/');
+        const response = await api.get('/api/finance/spending-categories/');
         const cats = response.data.results || response.data;
         setCategories(Array.isArray(cats) ? cats : []);
         setError('');
@@ -97,7 +97,7 @@ const CategorySettings = () => {
 
   const handleEditCategory = (category) => {
     setEditingCategory(category);
-    setNewCategory({ 
+    setNewCategory({
       name: category.name,
       monthly_budget: category.monthly_budget || 0,
       color: category.color || '#3498db',
@@ -109,7 +109,7 @@ const CategorySettings = () => {
   const handleDeleteCategory = async (categoryId) => {
     if (window.confirm('Are you sure you want to delete this category?')) {
       try {
-        await api.delete(`/finance/spending-categories/${categoryId}/`);
+        await api.delete(`/api/finance/spending-categories/${categoryId}/`);
         setCategories(prev => prev.filter(cat => cat.id !== categoryId));
         handleSave();
       } catch (error) {
@@ -123,13 +123,13 @@ const CategorySettings = () => {
     try {
       if (editingCategory) {
         // Update existing category
-        const response = await api.patch(`/finance/spending-categories/${editingCategory.id}/`, newCategory);
-        setCategories(prev => prev.map(cat => 
+        const response = await api.patch(`/api/finance/spending-categories/${editingCategory.id}/`, newCategory);
+        setCategories(prev => prev.map(cat =>
           cat.id === editingCategory.id ? response.data : cat
         ));
       } else {
         // Create new category
-        const response = await api.post('/finance/spending-categories/', newCategory);
+        const response = await api.post('/api/finance/spending-categories/', newCategory);
         setCategories(prev => [...prev, response.data]);
       }
       setOpenDialog(false);
@@ -141,7 +141,7 @@ const CategorySettings = () => {
   };
 
   const predefinedColors = [
-    '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', 
+    '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57',
     '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43',
     '#6c5ce7', '#a29bfe', '#fd79a8', '#fdcb6e', '#6c5ce7'
   ];
@@ -178,8 +178,8 @@ const CategorySettings = () => {
             <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e293b' }}>
               Budget Overview
             </Typography>
-            <Button 
-              variant="contained" 
+            <Button
+              variant="contained"
               startIcon={<AddIcon />}
               onClick={handleAddCategory}
               size="small"
@@ -187,7 +187,7 @@ const CategorySettings = () => {
               Add Category
             </Button>
           </Box>
-          
+
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
             <BudgetCard>
               <Typography variant="body2" color="text.secondary">Total Monthly Budget</Typography>
@@ -218,11 +218,11 @@ const CategorySettings = () => {
             <CategoryIcon sx={{ color: '#dc2626' }} />
             <SectionTitle variant="h6">Spending Categories</SectionTitle>
           </Box>
-          <Chip 
-            label={`${categories.length} categories`} 
-            size="small" 
-            color="primary" 
-            variant="outlined" 
+          <Chip
+            label={`${categories.length} categories`}
+            size="small"
+            color="primary"
+            variant="outlined"
           />
         </SectionHeader>
 
@@ -261,15 +261,15 @@ const CategorySettings = () => {
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <IconButton 
-                        size="small" 
+                      <IconButton
+                        size="small"
                         onClick={() => handleEditCategory(category)}
                         sx={{ color: '#3b82f6' }}
                       >
                         <EditIcon fontSize="small" />
                       </IconButton>
-                      <IconButton 
-                        size="small" 
+                      <IconButton
+                        size="small"
                         onClick={() => handleDeleteCategory(category.id)}
                         sx={{ color: '#dc2626' }}
                       >
@@ -286,8 +286,8 @@ const CategorySettings = () => {
 
       {/* Save Button */}
       <SaveButtonContainer>
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           size="large"
           onClick={handleSave}
           sx={{ px: 4 }}
@@ -310,7 +310,7 @@ const CategorySettings = () => {
               fullWidth
               required
             />
-            
+
             <TextField
               label="Monthly Budget"
               type="number"
@@ -347,8 +347,8 @@ const CategorySettings = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button 
-            onClick={handleSaveCategory} 
+          <Button
+            onClick={handleSaveCategory}
             variant="contained"
             disabled={!newCategory.name.trim()}
           >
