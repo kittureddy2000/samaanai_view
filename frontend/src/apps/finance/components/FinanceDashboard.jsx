@@ -91,8 +91,9 @@ const FinanceDashboard = ({ accounts, loading }) => {
       let matchesChartFilter = true;
       if (chartFilter.type === 'month' && chartFilter.value) {
         const txDate = new Date(tx.date);
-        const txMonth = txDate.getMonth(); // 0-indexed
-        matchesChartFilter = txMonth === chartFilter.value;
+        const txMonth = txDate.getMonth();
+        const txYear = txDate.getFullYear();
+        matchesChartFilter = txMonth === chartFilter.value.month && txYear === chartFilter.value.year;
       } else if (chartFilter.type === 'category' && chartFilter.value) {
         matchesChartFilter = tx.primary_category === chartFilter.value;
       }
@@ -605,18 +606,30 @@ const FinanceDashboard = ({ accounts, loading }) => {
   const monthlySpendingYTD = useMemo(() => {
     if (!dashboard || !dashboard.recent_transactions) return [];
 
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth();
+    // Use date range from filters
+    const startDate = new Date(dateRange.start);
+    const endDate = new Date(dateRange.end);
+    const startYear = startDate.getFullYear();
+    const endYear = endDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const endMonth = endDate.getMonth();
+
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    // Initialize months from January to current month
+    // Build list of months in the date range
     const monthlyData = [];
-    for (let i = 0; i <= currentMonth; i++) {
+    let currentDate = new Date(startYear, startMonth, 1);
+
+    while (currentDate <= endDate) {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
       monthlyData.push({
-        month: monthNames[i],
+        month: `${monthNames[month]}${startYear !== endYear ? ' ' + year.toString().slice(2) : ''}`,
         amount: 0,
-        monthIndex: i
+        monthIndex: month,
+        year: year
       });
+      currentDate.setMonth(currentDate.getMonth() + 1);
     }
 
     // Process transactions to calculate monthly spending
@@ -626,9 +639,9 @@ const FinanceDashboard = ({ accounts, loading }) => {
       const transactionMonth = transactionDate.getMonth();
       const amount = parseFloat(transaction.amount) || 0;
 
-      // Only include transactions from current year and positive amounts (expenses)
-      if (transactionYear === currentYear && transactionMonth <= currentMonth && amount > 0) {
-        const monthData = monthlyData.find(m => m.monthIndex === transactionMonth);
+      // Only include positive amounts (expenses) within the date range
+      if (amount > 0 && transactionDate >= startDate && transactionDate <= endDate) {
+        const monthData = monthlyData.find(m => m.monthIndex === transactionMonth && m.year === transactionYear);
         if (monthData) {
           monthData.amount += amount;
         }
@@ -636,7 +649,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
     });
 
     return monthlyData;
-  }, [dashboard]);
+  }, [dashboard, dateRange]);
 
   // Chart data for monthly spending YTD
   const monthlySpendingChartData = useMemo(() => {
@@ -690,14 +703,17 @@ const FinanceDashboard = ({ accounts, loading }) => {
     onClick: (event, elements) => {
       if (elements.length > 0) {
         const index = elements[0].index;
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const clickedMonth = monthNames[index];
+        const clickedData = monthlySpendingYTD[index];
 
-        // Toggle filter - if same month clicked, clear filter
-        if (chartFilter.type === 'month' && chartFilter.value === index) {
-          setChartFilter({ type: null, value: null, label: '' });
-        } else {
-          setChartFilter({ type: 'month', value: index, label: clickedMonth });
+        if (clickedData) {
+          const { monthIndex, year, month } = clickedData;
+
+          // Toggle filter - if same month clicked, clear filter
+          if (chartFilter.type === 'month' && chartFilter.value?.month === monthIndex && chartFilter.value?.year === year) {
+            setChartFilter({ type: null, value: null, label: '' });
+          } else {
+            setChartFilter({ type: 'month', value: { month: monthIndex, year }, label: month });
+          }
         }
       }
     }
@@ -990,7 +1006,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
         <TileRow>
           <TileWrapper>
             <WidgetCard sx={{ height: '420px !important', width: '100%', minHeight: '420px' }}>
-              <ChartTitle>Spending by Month (Year to Date)</ChartTitle>
+              <ChartTitle>Monthly Spending (Click bar to filter)</ChartTitle>
               <ChartContainer ref={monthlySpendingContainerRef}>
                 {monthlySpendingChartData ? (
                   <Bar
