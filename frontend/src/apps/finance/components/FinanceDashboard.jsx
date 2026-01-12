@@ -26,20 +26,35 @@ const FinanceDashboard = ({ accounts, loading }) => {
   const [dashLoading, setDashLoading] = useState(true);
   const [error, setError] = useState(null);
   const [chartsReady, setChartsReady] = useState(false);
+  // Pending filter state (user input)
+  const [pendingDateRange, setPendingDateRange] = useState({
+    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
+    end: new Date().toISOString().slice(0, 10),
+  });
+  const [pendingFilters, setPendingFilters] = useState({ institution: '', account: '', category: '' });
+
+  // Applied filter state (triggers API calls)
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
     end: new Date().toISOString().slice(0, 10),
   });
+  const [filters, setFilters] = useState({ institution: '', account: '', category: '' });
+
   const [institutions, setInstitutions] = useState([]);
   const [accountsList, setAccountsList] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [filters, setFilters] = useState({ institution: '', account: '', category: '' });
   const [search, setSearch] = useState('');
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
 
   // Chart click filter state
   const [chartFilter, setChartFilter] = useState({ type: null, value: null, label: '' });
+
+  // Apply Filters function
+  const applyFilters = () => {
+    setDateRange({ ...pendingDateRange });
+    setFilters({ ...pendingFilters });
+  };
 
   // Sorting state for transactions table
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
@@ -899,8 +914,8 @@ const FinanceDashboard = ({ accounts, loading }) => {
             <TextField
               label="Start Date"
               type="date"
-              value={dateRange.start}
-              onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+              value={pendingDateRange.start}
+              onChange={(e) => setPendingDateRange(prev => ({ ...prev, start: e.target.value }))}
               InputLabelProps={{ shrink: true }}
               size="small"
               fullWidth
@@ -910,8 +925,8 @@ const FinanceDashboard = ({ accounts, loading }) => {
             <TextField
               label="End Date"
               type="date"
-              value={dateRange.end}
-              onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+              value={pendingDateRange.end}
+              onChange={(e) => setPendingDateRange(prev => ({ ...prev, end: e.target.value }))}
               InputLabelProps={{ shrink: true }}
               size="small"
               fullWidth
@@ -920,9 +935,9 @@ const FinanceDashboard = ({ accounts, loading }) => {
           <FormControl sx={{ flex: 1.2, minWidth: 150 }} size="small">
             <InputLabel>Institution</InputLabel>
             <Select
-              value={filters.institution}
+              value={pendingFilters.institution}
               label="Institution"
-              onChange={(e) => setFilters(prev => ({ ...prev, institution: e.target.value, account: '' }))}
+              onChange={(e) => setPendingFilters(prev => ({ ...prev, institution: e.target.value, account: '' }))}
               fullWidth
             >
               <MenuItem value=""><em>All Institutions</em></MenuItem>
@@ -932,30 +947,42 @@ const FinanceDashboard = ({ accounts, loading }) => {
           <FormControl sx={{ flex: 1, minWidth: 130 }} size="small">
             <InputLabel>Account</InputLabel>
             <Select
-              value={filters.account}
+              value={pendingFilters.account}
               label="Account"
-              onChange={(e) => setFilters(prev => ({ ...prev, account: e.target.value }))}
-              disabled={!filters.institution && accountsList.length > 0}
+              onChange={(e) => setPendingFilters(prev => ({ ...prev, account: e.target.value }))}
+              disabled={!pendingFilters.institution && accountsList.length > 0}
               fullWidth
             >
               <MenuItem value=""><em>All Accounts</em></MenuItem>
               {Array.isArray(accountsList) ? accountsList
-                .filter(acc => !filters.institution || acc.institution_id === filters.institution || (acc.institution && acc.institution.plaid_institution_id === filters.institution))
+                .filter(acc => !pendingFilters.institution || acc.institution_id === pendingFilters.institution || (acc.institution && acc.institution.plaid_institution_id === pendingFilters.institution))
                 .map(acc => <MenuItem key={acc.id || acc.plaid_account_id} value={acc.plaid_account_id}>{acc.name}</MenuItem>) : []}
             </Select>
           </FormControl>
           <FormControl sx={{ flex: 1, minWidth: 120 }} size="small">
             <InputLabel>Category</InputLabel>
             <Select
-              value={filters.category}
+              value={pendingFilters.category}
               label="Category"
-              onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))}
+              onChange={(e) => setPendingFilters(prev => ({ ...prev, category: e.target.value }))}
               fullWidth
             >
               <MenuItem value=""><em>All Categories</em></MenuItem>
               {Array.isArray(categories) ? categories.map(cat => <MenuItem key={cat.id || cat.name} value={cat.name}>{cat.name}</MenuItem>) : []}
             </Select>
           </FormControl>
+          <Button
+            variant="contained"
+            onClick={applyFilters}
+            sx={{
+              minWidth: 120,
+              height: 40,
+              bgcolor: '#6366f1',
+              '&:hover': { bgcolor: '#4f46e5' }
+            }}
+          >
+            Apply Filters
+          </Button>
         </Box>
       </Paper>
 
