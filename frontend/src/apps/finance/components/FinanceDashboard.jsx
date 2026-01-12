@@ -13,7 +13,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { TextField, Box, Select, MenuItem, InputLabel, FormControl, Grid, Paper, Typography, Button } from '@mui/material';
+import { TextField, Box, Select, MenuItem, InputLabel, FormControl, Grid, Paper, Typography, Button, IconButton } from '@mui/material';
 import api, { FINANCE_BASE_PATH, getInstitutions, getAccounts, getSpendingCategories, getDashboardData } from '../services/api';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import * as XLSX from 'xlsx';
@@ -38,6 +38,9 @@ const FinanceDashboard = ({ accounts, loading }) => {
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
 
+  // Chart click filter state
+  const [chartFilter, setChartFilter] = useState({ type: null, value: null, label: '' });
+
   // Sorting state for transactions table
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
 
@@ -54,7 +57,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, minAmount, maxAmount, filters]);
+  }, [debouncedSearch, minAmount, maxAmount, filters, chartFilter]);
 
   const filteredTransactions = useMemo(() => {
     if (!dashboard || !dashboard.recent_transactions) return [];
@@ -68,7 +71,18 @@ const FinanceDashboard = ({ accounts, loading }) => {
       const amt = parseFloat(tx.amount);
       const matchesMin = minAmount !== '' ? amt >= parseFloat(minAmount) : true;
       const matchesMax = maxAmount !== '' ? amt <= parseFloat(maxAmount) : true;
-      return matchesSearch && matchesMin && matchesMax;
+
+      // Chart filter - filter by month or category
+      let matchesChartFilter = true;
+      if (chartFilter.type === 'month' && chartFilter.value) {
+        const txDate = new Date(tx.date);
+        const txMonth = txDate.getMonth(); // 0-indexed
+        matchesChartFilter = txMonth === chartFilter.value;
+      } else if (chartFilter.type === 'category' && chartFilter.value) {
+        matchesChartFilter = tx.primary_category === chartFilter.value;
+      }
+
+      return matchesSearch && matchesMin && matchesMax && matchesChartFilter;
     });
 
     // Apply sorting
@@ -106,7 +120,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
     }
 
     return filtered;
-  }, [dashboard, debouncedSearch, minAmount, maxAmount, sortConfig]);
+  }, [dashboard, debouncedSearch, minAmount, maxAmount, sortConfig, chartFilter]);
 
   // Paginated transactions
   const paginatedTransactions = useMemo(() => {
@@ -657,6 +671,20 @@ const FinanceDashboard = ({ accounts, loading }) => {
           display: false
         }
       }
+    },
+    onClick: (event, elements) => {
+      if (elements.length > 0) {
+        const index = elements[0].index;
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const clickedMonth = monthNames[index];
+
+        // Toggle filter - if same month clicked, clear filter
+        if (chartFilter.type === 'month' && chartFilter.value === index) {
+          setChartFilter({ type: null, value: null, label: '' });
+        } else {
+          setChartFilter({ type: 'month', value: index, label: clickedMonth });
+        }
+      }
     }
   };
 
@@ -960,92 +988,21 @@ const FinanceDashboard = ({ accounts, loading }) => {
 
           <TileWrapper>
             <WidgetCard sx={{ height: '420px !important', width: '100%', minHeight: '420px' }}>
-              <ChartTitle>Net Income by Month (Year to Date)</ChartTitle>
-              <ChartContainer ref={monthlyNetIncomeContainerRef}>
-                {monthlyNetIncomeChartData ? (
-                  <Bar
-                    ref={monthlyNetIncomeRef}
-                    data={monthlyNetIncomeChartData}
-                    options={netIncomeChartOptions}
-                  />
-                ) : (
-                  <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: '280px',
-                    color: '#6b7280'
-                  }}>
-                    <Typography>No income data available</Typography>
-                  </Box>
-                )}
-              </ChartContainer>
-            </WidgetCard>
-          </TileWrapper>
-        </TileRow>
-
-        <TileRow>
-          <TileWrapper>
-            <WidgetCard sx={{ height: '420px !important', width: '100%', minHeight: '420px' }}>
-              <ChartTitle>Top Spending Categories</ChartTitle>
-              <ChartContainer ref={spendingChartContainerRef}>
-                {topSpendingCategories.length > 0 ? (
-                  <div style={{ width: '100%', overflowY: 'auto', maxHeight: '320px' }}>
-                    <StyledTable>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'left', padding: '12px 16px', color: '#1976d2', fontWeight: 600, background: '#f4f6fa' }}>
-                            Category
-                          </th>
-                          <th style={{ textAlign: 'right', padding: '12px 16px', color: '#1976d2', fontWeight: 600, background: '#f4f6fa' }}>
-                            Amount
-                          </th>
-                          <th style={{ textAlign: 'right', padding: '12px 16px', color: '#1976d2', fontWeight: 600, background: '#f4f6fa' }}>
-                            %
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {topSpendingCategories.map((category, index) => (
-                          <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
-                            <td style={{ padding: '12px 16px', fontWeight: 500, color: '#374151' }}>
-                              {category.name}
-                            </td>
-                            <td style={{ textAlign: 'right', padding: '12px 16px', fontWeight: 600, color: '#111827' }}>
-                              ${category.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td style={{ textAlign: 'right', padding: '12px 16px', fontWeight: 500, color: '#6b7280' }}>
-                              {category.percentage}%
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </StyledTable>
-                  </div>
-                ) : (
-                  <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100%',
-                    color: '#6b7280'
-                  }}>
-                    <Typography>No spending data available</Typography>
-                  </Box>
-                )}
-              </ChartContainer>
-            </WidgetCard>
-          </TileWrapper>
-
-          <TileWrapper>
-            <WidgetCard sx={{ height: '420px !important', width: '100%', minHeight: '420px' }}>
-              <ChartTitle>Category Breakdown (Click to drill down)</ChartTitle>
+              <ChartTitle>Category Breakdown (Click to filter)</ChartTitle>
               <ChartContainer ref={categoryPieContainerRef}>
                 <SpendingCategoryDrilldown
                   spendingData={dashboard?.spending_by_category || []}
                   transactions={dashboard?.recent_transactions || []}
                   onCategorySelect={(category) => {
-                    console.log('Selected category:', category);
+                    if (category && category.primary_category) {
+                      // Toggle filter - if same category clicked, clear filter
+                      if (chartFilter.type === 'category' && chartFilter.value === category.primary_category) {
+                        setChartFilter({ type: null, value: null, label: '' });
+                      } else {
+                        const label = category.primary_category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        setChartFilter({ type: 'category', value: category.primary_category, label });
+                      }
+                    }
                   }}
                 />
               </ChartContainer>
@@ -1056,9 +1013,33 @@ const FinanceDashboard = ({ accounts, loading }) => {
 
       {/* Transactions Table */}
       <TransactionCard style={{ marginTop: '16px' }}>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#fff' }}>
-          Recent Transactions
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff' }}>
+            Recent Transactions
+          </Typography>
+          {chartFilter.type && (
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              bgcolor: 'rgba(99, 102, 241, 0.3)',
+              px: 2,
+              py: 0.5,
+              borderRadius: 2
+            }}>
+              <Typography variant="body2" sx={{ color: '#fff' }}>
+                Filtering by {chartFilter.type === 'month' ? 'Month' : 'Category'}: <strong>{chartFilter.label}</strong>
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={() => setChartFilter({ type: null, value: null, label: '' })}
+                sx={{ color: '#fff', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}
+              >
+                ✕
+              </IconButton>
+            </Box>
+          )}
+        </Box>
 
         <Box sx={{
           display: 'flex',
