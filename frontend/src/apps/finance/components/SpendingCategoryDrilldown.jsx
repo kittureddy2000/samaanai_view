@@ -1,8 +1,13 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Pie } from 'react-chartjs-2';
-import { Box, Typography, Breadcrumbs, Link, IconButton, Tooltip } from '@mui/material';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+import { Box, Typography, Breadcrumbs, Link, IconButton, Tooltip as MuiTooltip } from '@mui/material';
 import { Home as HomeIcon, ArrowBack as BackIcon } from '@mui/icons-material';
 import styled from 'styled-components';
+
+// Register Chart.js components and datalabels plugin
+ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
 const DrilldownContainer = styled(Box)`
   display: flex;
@@ -216,6 +221,33 @@ const SpendingCategoryDrilldown = ({ spendingData = [], transactions = [], onCat
                         const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                         return `$${value.toLocaleString()} (${percentage}%)`;
                     }
+                }
+            },
+            datalabels: {
+                color: '#fff',
+                font: {
+                    weight: 'bold',
+                    size: 11
+                },
+                formatter: (value, context) => {
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const percentage = total > 0 ? ((value / total) * 100).toFixed(0) : 0;
+                    // Only show label if slice is big enough (> 5%)
+                    if (percentage < 5) return '';
+                    const label = context.chart.data.labels[context.dataIndex];
+                    // Truncate long labels
+                    const shortLabel = label.length > 12 ? label.substring(0, 10) + '...' : label;
+                    return `${shortLabel}\n${percentage}%`;
+                },
+                textAlign: 'center',
+                anchor: 'center',
+                align: 'center',
+                offset: 0,
+                display: (context) => {
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const value = context.dataset.data[context.dataIndex];
+                    const percentage = total > 0 ? (value / total) * 100 : 0;
+                    return percentage >= 5; // Only display if >= 5%
                 }
             }
         },
