@@ -822,11 +822,30 @@ class DashboardView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
+        from datetime import datetime
         analytics = AnalyticsService()
         
-        # Get date range for current month
+        # Get date range from query params or default to current month
         now = timezone.now()
-        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            except ValueError:
+                start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+            except ValueError:
+                end_date = now
+        else:
+            end_date = now
         
         # Net worth calculation
         net_worth_data = analytics.calculate_net_worth(request.user)
@@ -837,29 +856,31 @@ class DashboardView(views.APIView):
             is_active=True
         ).prefetch_related('accounts')
         
-        # Recent transactions
+        # Recent transactions - filter by date range and get all (not just 20)
         recent_transactions = Transaction.objects.filter(
-            account__institution__user=request.user
-        ).select_related('account', 'account__institution').order_by('-date')[:20]
+            account__institution__user=request.user,
+            date__gte=start_date.date(),
+            date__lte=end_date.date()
+        ).select_related('account', 'account__institution').order_by('-date')
         
-        # Spending by category
+        # Spending by category for the date range
         spending_by_category = analytics.get_spending_by_category(
             request.user,
-            start_of_month,
-            now
+            start_date,
+            end_date
         )
         
-        # Monthly cash flow
+        # Monthly cash flow for the end date's month
         monthly_cash_flow = analytics.get_monthly_cash_flow(
             request.user,
-            now.year,
-            now.month
+            end_date.year,
+            end_date.month
         )
         
-        # Net worth trend (last 30 days)
+        # Net worth trend (last 30 days from end_date)
         net_worth_trend = NetWorthSnapshot.objects.filter(
             user=request.user,
-            date__gte=now - timedelta(days=30)
+            date__gte=end_date - timedelta(days=30)
         ).order_by('date')
         
         data = {
