@@ -13,9 +13,11 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { TextField, Box, Select, MenuItem, InputLabel, FormControl, Grid, Paper, Typography, Button, IconButton } from '@mui/material';
-import api, { FINANCE_BASE_PATH, getInstitutions, getAccounts, getSpendingCategories, getDashboardData } from '../services/api';
+import { TextField, Box, Select, MenuItem, InputLabel, FormControl, Grid, Paper, Typography, Button, IconButton, Tooltip, Autocomplete, Chip } from '@mui/material';
+import api, { FINANCE_BASE_PATH, getInstitutions, getAccounts, getSpendingCategories, getDashboardData, toggleExcludeFromReports } from '../services/api';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import * as XLSX from 'xlsx';
 import SpendingCategoryDrilldown from './SpendingCategoryDrilldown';
 
@@ -889,6 +891,25 @@ const FinanceDashboard = ({ accounts, loading }) => {
     };
   }, []);
 
+  // Toggle exclude from reports
+  const handleToggleExclude = async (transactionId, currentValue) => {
+    try {
+      const result = await toggleExcludeFromReports(transactionId, !currentValue);
+      if (result) {
+        setDashboard(prevDashboard => ({
+          ...prevDashboard,
+          recent_transactions: prevDashboard.recent_transactions.map(tx =>
+            tx.id === transactionId
+              ? { ...tx, exclude_from_reports: result.exclude_from_reports }
+              : tx
+          )
+        }));
+      }
+    } catch (error) {
+      console.error('Error toggling exclude:', error);
+    }
+  };
+
   return (
     <DashboardContainer>
       {dashLoading && <LoadingOverlay>Loading dashboard...</LoadingOverlay>}
@@ -1160,30 +1181,37 @@ const FinanceDashboard = ({ accounts, loading }) => {
                   <SortableHeader
                     onClick={() => handleSort('date')}
                     $sortDirection={sortConfig.key === 'date' ? sortConfig.direction : null}
+                    style={{ width: 100 }}
                   >
                     Date
                   </SortableHeader>
+                  <th style={{ width: 80 }}>Status</th>
                   <SortableHeader
                     onClick={() => handleSort('description')}
                     $sortDirection={sortConfig.key === 'description' ? sortConfig.direction : null}
+                    style={{ width: '20%' }}
                   >
-                    Description
+                    Payee
                   </SortableHeader>
                   <SortableHeader
                     onClick={() => handleSort('category')}
                     $sortDirection={sortConfig.key === 'category' ? sortConfig.direction : null}
+                    style={{ width: '15%' }}
                   >
-                    Plaid Category
+                    Category
                   </SortableHeader>
                   <SortableHeader
                     onClick={() => handleSort('user_category')}
                     $sortDirection={sortConfig.key === 'user_category' ? sortConfig.direction : null}
+                    style={{ width: 150 }}
                   >
-                    Custom Category
+                    Custom
                   </SortableHeader>
+                  <th style={{ width: 60, textAlign: 'center' }}>Reports</th>
                   <SortableHeader
                     onClick={() => handleSort('amount')}
                     $sortDirection={sortConfig.key === 'amount' ? sortConfig.direction : null}
+                    style={{ width: 100, textAlign: 'right' }}
                   >
                     Amount
                   </SortableHeader>
@@ -1191,33 +1219,81 @@ const FinanceDashboard = ({ accounts, loading }) => {
               </thead>
               <tbody>
                 {paginatedTransactions.map(tx => (
-                  <tr key={tx.id || tx.transaction_id}>
+                  <tr key={tx.id || tx.transaction_id} style={{ opacity: tx.exclude_from_reports ? 0.5 : 1 }}>
                     <td>{formatDate(tx.date)}</td>
-                    <td>{tx.merchant_name || tx.name}</td>
-                    <td>{tx.primary_category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized'}</td>
                     <td>
-                      <TextField
-                        value={categoryUpdates[tx.id || tx.transaction_id] ?? tx.user_category ?? ''}
-                        onChange={(e) => handleUpdateUserCategory(tx.id || tx.transaction_id, e.target.value)}
-                        placeholder="Set custom category..."
+                      <Chip
+                        label={tx.pending ? 'Pending' : 'Cleared'}
                         size="small"
-                        variant="outlined"
                         sx={{
-                          '& .MuiOutlinedInput-root': {
-                            fontSize: '0.875rem',
-                            padding: 0,
-                            backgroundColor: (categoryUpdates[tx.id || tx.transaction_id] !== undefined) ? '#fff3cd' : 'transparent',
-                            '& fieldset': { border: 'none' },
-                            '&:hover fieldset': { border: '1px solid #e0e0e0' },
-                            '&.Mui-focused fieldset': { border: '1px solid #1976d2' },
-                          },
-                          '& .MuiOutlinedInput-input': {
-                            padding: '6px 8px',
-                          }
+                          fontSize: '0.7rem',
+                          height: 22,
+                          bgcolor: tx.pending ? 'rgba(251, 191, 36, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                          color: tx.pending ? '#fbbf24' : '#10b981',
+                          fontWeight: 500
                         }}
                       />
                     </td>
-                    <td>{tx.amount_display || `$${Number(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</td>
+                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={tx.merchant_name || tx.name}>
+                      {tx.merchant_name || tx.name}
+                    </td>
+                    <td style={{ color: 'rgba(255,255,255,0.6)' }}>
+                      {tx.primary_category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized'}
+                    </td>
+                    <td>
+                      <Autocomplete
+                        value={categoryUpdates[tx.id || tx.transaction_id] ?? tx.user_category ?? ''}
+                        onChange={(event, newValue) => {
+                          handleUpdateUserCategory(tx.id || tx.transaction_id, newValue || '');
+                        }}
+                        onInputChange={(event, newInputValue) => {
+                          handleUpdateUserCategory(tx.id || tx.transaction_id, newInputValue || '');
+                        }}
+                        options={Array.isArray(categories) ? categories.map(cat => cat.name) : []}
+                        freeSolo
+                        size="small"
+                        sx={{ minWidth: 120 }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            placeholder="Set..."
+                            variant="outlined"
+                            sx={{
+                              '& .MuiOutlinedInput-root': {
+                                fontSize: '0.8rem',
+                                padding: '2px 6px',
+                                background: 'transparent',
+                                color: '#fff',
+                                '& fieldset': { border: 'none' },
+                                '&:hover fieldset': { border: '1px solid rgba(99,102,241,0.3)' },
+                                '&.Mui-focused fieldset': { border: '1px solid #6366f1' },
+                              },
+                              '& .MuiOutlinedInput-input': {
+                                padding: '4px 0',
+                                color: '#fff',
+                              }
+                            }}
+                          />
+                        )}
+                      />
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <Tooltip title={tx.exclude_from_reports ? 'Include in reports' : 'Exclude from reports'}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleToggleExclude(tx.id, tx.exclude_from_reports)}
+                          sx={{
+                            color: tx.exclude_from_reports ? '#f87171' : 'rgba(255,255,255,0.4)',
+                            '&:hover': { color: tx.exclude_from_reports ? '#ef4444' : '#818cf8' }
+                          }}
+                        >
+                          {tx.exclude_from_reports ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
+                    </td>
+                    <td style={{ textAlign: 'right', color: tx.amount < 0 ? '#10b981' : '#f87171' }}>
+                      {tx.amount_display || `${tx.amount < 0 ? '+' : '-'}$${Math.abs(Number(tx.amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    </td>
                   </tr>
                 ))}
               </tbody>
