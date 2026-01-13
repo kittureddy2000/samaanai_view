@@ -13,7 +13,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { TextField, Box, Select, MenuItem, InputLabel, FormControl, Grid, Paper, Typography, Button, IconButton, Tooltip, Autocomplete, Chip } from '@mui/material';
+import { TextField, Box, Select, MenuItem, InputLabel, FormControl, Grid, Paper, Typography, Button, IconButton, Tooltip as MuiTooltip, Autocomplete, Chip } from '@mui/material';
 import api, { FINANCE_BASE_PATH, getInstitutions, getAccounts, getSpendingCategories, getDashboardData, toggleExcludeFromReports } from '../services/api';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -1278,7 +1278,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
                       />
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <Tooltip title={tx.exclude_from_reports ? 'Include in reports' : 'Exclude from reports'}>
+                      <MuiTooltip title={tx.exclude_from_reports ? 'Include in reports' : 'Exclude from reports'}>
                         <IconButton
                           size="small"
                           onClick={() => handleToggleExclude(tx.id, tx.exclude_from_reports)}
@@ -1289,7 +1289,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
                         >
                           {tx.exclude_from_reports ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
                         </IconButton>
-                      </Tooltip>
+                      </MuiTooltip>
                     </td>
                     <td style={{ textAlign: 'right', color: tx.amount < 0 ? '#10b981' : '#f87171' }}>
                       {tx.amount_display || `${tx.amount < 0 ? '+' : '-'}$${Math.abs(Number(tx.amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
