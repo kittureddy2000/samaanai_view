@@ -295,8 +295,8 @@ const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccou
             {status.icon}
           </StatusIcon>
           <AccountDetails>
-            <Tooltip title={account.name} placement="top" arrow>
-              <AccountName>{account.name}</AccountName>
+            <Tooltip title={account.display_name || account.name} placement="top" arrow>
+              <AccountName>{account.display_name || account.name}</AccountName>
             </Tooltip>
             <AccountMeta>
               {account.institution?.name || 'Unknown Bank'}
