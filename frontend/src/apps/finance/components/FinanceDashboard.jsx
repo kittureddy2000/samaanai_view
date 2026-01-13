@@ -13,6 +13,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { TextField, Box, Select, MenuItem, InputLabel, FormControl, Grid, Paper, Typography, Button, IconButton, Tooltip as MuiTooltip, Autocomplete, Chip } from '@mui/material';
 import api, { FINANCE_BASE_PATH, getInstitutions, getAccounts, getSpendingCategories, getDashboardData, toggleExcludeFromReports } from '../services/api';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -21,7 +22,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import * as XLSX from 'xlsx';
 import SpendingCategoryDrilldown from './SpendingCategoryDrilldown';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, ChartDataLabels);
 
 const FinanceDashboard = ({ accounts, loading }) => {
   const [dashboard, setDashboard] = useState(null);
@@ -120,8 +121,8 @@ const FinanceDashboard = ({ accounts, loading }) => {
           aValue = a.merchant_name || a.name || '';
           bValue = b.merchant_name || b.name || '';
         } else if (sortConfig.key === 'category') {
-          aValue = a.primary_category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized';
-          bValue = b.primary_category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized';
+          aValue = a.primary_category?.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized';
+          bValue = b.primary_category?.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized';
         } else if (sortConfig.key === 'user_category') {
           aValue = a.user_category || '';
           bValue = b.user_category || '';
@@ -303,7 +304,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
         if (transaction.amount > 0) { // Only expenses
           // Use custom category if available, otherwise fall back to Plaid category
           const effectiveCategory = transaction.user_category ||
-            transaction.primary_category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) ||
+            transaction.primary_category?.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) ||
             'Uncategorized';
 
           categoryTotals[effectiveCategory] = (categoryTotals[effectiveCategory] || 0) + parseFloat(transaction.amount);
@@ -327,7 +328,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
   const spendingChartData = dashboard && dashboard.spending_by_category && dashboard.spending_by_category.length > 0
     ? {
       labels: dashboard.spending_by_category.map(cat =>
-        cat.primary_category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized'
+        cat.primary_category?.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized'
       ),
       datasets: [
         {
@@ -360,7 +361,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
   const spendingPieData = dashboard && dashboard.spending_by_category && dashboard.spending_by_category.length > 0
     ? {
       labels: dashboard.spending_by_category.map(cat =>
-        cat.primary_category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized'
+        cat.primary_category?.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized'
       ),
       datasets: [
         {
@@ -684,6 +685,22 @@ const FinanceDashboard = ({ accounts, loading }) => {
           label: function (context) {
             return `$${context.parsed.y.toLocaleString()}`;
           }
+        }
+      },
+      datalabels: {
+        color: '#ffffff',
+        anchor: 'end',
+        align: 'top',
+        offset: 4,
+        font: {
+          weight: 'bold',
+          size: 10
+        },
+        formatter: (value) => {
+          if (value >= 1000) {
+            return '$' + Math.round(value / 1000) + 'k';
+          }
+          return '$' + Math.round(value);
         }
       }
     },
@@ -1063,7 +1080,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
                       if (chartFilter.type === 'category' && chartFilter.value === category.primary_category) {
                         setChartFilter({ type: null, value: null, label: '' });
                       } else {
-                        const label = category.primary_category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        const label = category.primary_category.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
                         setChartFilter({ type: 'category', value: category.primary_category, label });
                       }
                     }
@@ -1238,7 +1255,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
                       {tx.merchant_name || tx.name}
                     </td>
                     <td style={{ color: 'rgba(255,255,255,0.6)' }}>
-                      {tx.primary_category?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized'}
+                      {tx.primary_category?.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) || 'Uncategorized'}
                     </td>
                     <td>
                       <Autocomplete

@@ -122,7 +122,7 @@ const SpendingCategoryDrilldown = ({ spendingData = [], transactions = [], onCat
     // Format category name for display
     const formatCategoryName = (category) => {
         if (!category) return 'Uncategorized';
-        return category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return category.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
     };
 
     // Get current level data based on drill path
