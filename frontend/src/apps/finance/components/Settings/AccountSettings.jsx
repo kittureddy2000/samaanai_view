@@ -152,6 +152,11 @@ const AccountSettings = ({ accounts: realAccounts, loading, onRefreshAccounts })
       enqueueSnackbar('Account name updated successfully', { variant: 'success' });
       setEditingAccountId(null);
       setCustomNameValue('');
+
+      // Refresh the accounts in the parent to update the sidebar
+      if (onRefreshAccounts) {
+        onRefreshAccounts();
+      }
     } catch (error) {
       enqueueSnackbar('Failed to update account name', { variant: 'error' });
     }
