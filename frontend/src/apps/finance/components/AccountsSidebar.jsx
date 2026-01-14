@@ -34,6 +34,33 @@ const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccou
   const [isUpgrading, setIsUpgrading] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
 
+  // Resize state
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const isResizing = React.useRef(false);
+  const sidebarRef = React.useRef(null);
+
+  // Handle resize mouse events
+  const handleMouseDown = useCallback((e) => {
+    isResizing.current = true;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    e.preventDefault();
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isResizing.current) return;
+    const newWidth = e.clientX - (sidebarRef.current?.getBoundingClientRect().left || 0);
+    if (newWidth >= 200 && newWidth <= 450) {
+      setSidebarWidth(newWidth);
+    }
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isResizing.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseMove]);
+
   // Get the most recent update time from institutions
   const lastUpdated = useMemo(() => {
     if (!accounts || accounts.length === 0) return null;
@@ -436,8 +463,10 @@ const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccou
     </SectionHeaderContainer>
   );
 
+
   return (
-    <SidebarRoot>
+    <SidebarRoot ref={sidebarRef} style={{ width: `${sidebarWidth}px` }}>
+      <ResizeHandle onMouseDown={handleMouseDown} />
       {/* Header Section - Accounts Title */}
       <HeaderSection>
         <HeaderLeft>
@@ -614,7 +643,8 @@ const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccou
 };
 
 const SidebarRoot = styled.div`
-  width: 240px;
+  min-width: 200px;
+  max-width: 450px;
   background: #16213e;
   border-right: 1px solid rgba(99, 102, 241, 0.15);
   display: flex;
@@ -633,6 +663,26 @@ const SidebarRoot = styled.div`
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+`;
+
+const ResizeHandle = styled.div`
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background 0.2s;
+  z-index: 100;
+  
+  &:hover {
+    background: rgba(99, 102, 241, 0.5);
+  }
+  
+  &:active {
+    background: rgba(99, 102, 241, 0.7);
   }
 `;
 
@@ -878,7 +928,7 @@ const AccountItemContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px 8px 32px;
+  padding: 8px 12px 8px 12px;
   cursor: pointer;
   background: ${props => props.$isSelected ? 'rgba(99, 102, 241, 0.2)' : 'transparent'};
   border-left: ${props => props.$isSelected ? '3px solid #6366f1' : '3px solid transparent'};
@@ -916,7 +966,6 @@ const AccountName = styled.div`
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.3;
-  max-width: 140px;
 `;
 
 const AccountMeta = styled.div`
