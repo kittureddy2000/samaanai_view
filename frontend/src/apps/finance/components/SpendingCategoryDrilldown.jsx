@@ -260,11 +260,11 @@ const SpendingCategoryDrilldown = ({ spendingData = [], transactions = [], onCat
         <DrilldownContainer>
             {drillPath.length > 0 && (
                 <BreadcrumbContainer>
-                    <Tooltip title="Go back">
+                    <MuiTooltip title="Go back">
                         <IconButton size="small" onClick={handleBack} sx={{ color: '#6366f1' }}>
                             <BackIcon fontSize="small" />
                         </IconButton>
-                    </Tooltip>
+                    </MuiTooltip>
                     <Breadcrumbs separator="›" sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem' }}>
                         <Link
                             component="button"
