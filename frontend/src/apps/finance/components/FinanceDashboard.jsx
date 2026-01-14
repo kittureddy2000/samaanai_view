@@ -637,6 +637,9 @@ const FinanceDashboard = ({ accounts, loading }) => {
 
     // Process transactions to calculate monthly spending
     dashboard.recent_transactions.forEach(transaction => {
+      // Skip transactions excluded from reports
+      if (transaction.exclude_from_reports) return;
+
       const transactionDate = new Date(transaction.date);
       const transactionYear = transactionDate.getFullYear();
       const transactionMonth = transactionDate.getMonth();
@@ -1073,7 +1076,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
               <ChartContainer ref={categoryPieContainerRef}>
                 <SpendingCategoryDrilldown
                   spendingData={dashboard?.spending_by_category || []}
-                  transactions={dashboard?.recent_transactions || []}
+                  transactions={(dashboard?.recent_transactions || []).filter(tx => !tx.exclude_from_reports)}
                   onCategorySelect={(category) => {
                     if (category && category.primary_category) {
                       // Toggle filter - if same category clicked, clear filter
