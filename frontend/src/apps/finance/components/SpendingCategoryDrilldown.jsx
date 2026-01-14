@@ -127,10 +127,15 @@ const SpendingCategoryDrilldown = ({ spendingData = [], transactions = [], onCat
 
     // Get current level data based on drill path
     const currentData = useMemo(() => {
-        if (!spendingData || spendingData.length === 0) {
-            // If no spending data provided, calculate from transactions
-            if (!transactions || transactions.length === 0) return [];
+        // Always calculate from filtered transactions to respect exclude_from_reports
+        if (!transactions || transactions.length === 0) {
+            // Fall back to spendingData if no transactions
+            if (!spendingData || spendingData.length === 0) return [];
+            return spendingData.filter(cat => cat.total > 0);
+        }
 
+        if (drillPath.length === 0) {
+            // Root level - calculate category totals from transactions
             const categoryTotals = {};
             transactions.forEach(tx => {
                 if (tx.amount > 0) { // Only expenses
@@ -142,11 +147,6 @@ const SpendingCategoryDrilldown = ({ spendingData = [], transactions = [], onCat
             return Object.entries(categoryTotals)
                 .map(([name, total]) => ({ primary_category: name, total }))
                 .sort((a, b) => b.total - a.total);
-        }
-
-        if (drillPath.length === 0) {
-            // Root level - show parent categories
-            return spendingData.filter(cat => cat.total > 0);
         } else {
             // Drilled into a category - try to break down by transaction details
             const parentCategory = drillPath[drillPath.length - 1];
