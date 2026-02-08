@@ -518,6 +518,11 @@ logger.info(f"PLAID_API_VERSION loaded in settings: {PLAID_API_VERSION}")
 # You might also want to define your webhook URL if you're using webhooks
 PLAID_WEBHOOK_URL = os.environ.get('PLAID_WEBHOOK_URL')
 
+# --- Gemini API Configuration (for PDF transaction extraction) ---
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+if not GEMINI_API_KEY:
+    logger.warning("GEMINI_API_KEY not set. PDF transaction import will not work.")
+
 # --- Email Configuration (SendGrid) ---
 SENDGRID_API_KEY = env('SENDGRID_API_KEY', default='')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@financeapp.com')

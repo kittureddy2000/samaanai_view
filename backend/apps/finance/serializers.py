@@ -20,7 +20,7 @@ class AccountSerializer(serializers.ModelSerializer):
             'id', 'name', 'custom_name', 'display_name', 'official_name', 'mask', 'type', 'subtype',
             'type_display', 'subtype_display', 'current_balance',
             'available_balance', 'limit', 'iso_currency_code',
-            'is_active', 'is_selected', 'is_asset', 'is_liability',
+            'is_active', 'is_selected', 'is_asset', 'is_liability', 'is_manual',
             'balance_display', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'is_asset', 'is_liability', 'display_name']
@@ -49,7 +49,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
         model = Institution
         fields = [
             'id', 'name', 'logo_url', 'primary_color', 'url',
-            'is_active', 'needs_update', 'last_successful_update',
+            'is_active', 'is_manual', 'needs_update', 'last_successful_update',
             'error_message', 'accounts', 'total_balance', 'account_count',
             'created_at', 'updated_at'
         ]
@@ -425,6 +425,25 @@ class PlaidPublicTokenExchangeSerializer(serializers.Serializer):
     institution_id = serializers.CharField(required=True)
     institution_name = serializers.CharField(required=True)
     accounts = serializers.JSONField(required=True)
+
+
+class ManualAccountSerializer(serializers.Serializer):
+    """Serializer for creating manual accounts"""
+    institution_name = serializers.CharField(max_length=200)
+    account_name = serializers.CharField(max_length=200)
+    account_type = serializers.ChoiceField(choices=Account.ACCOUNT_TYPE_CHOICES)
+    account_subtype = serializers.ChoiceField(choices=Account.ACCOUNT_SUBTYPE_CHOICES, required=False, allow_blank=True)
+    current_balance = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, default=0)
+    
+    # Common preset institutions for quick selection
+    PRESET_INSTITUTIONS = {
+        'coinbase': {'name': 'coinbase', 'primary_color': '#0052ff', 'url': 'https://coinbase.com'},
+        'robinhood': {'name': 'Robinhood', 'primary_color': '#00c805', 'url': 'https://robinhood.com'},
+        'crypto.com': {'name': 'Crypto.com', 'primary_color': '#103f68', 'url': 'https://crypto.com'},
+        'binance': {'name': 'Binance', 'primary_color': '#f3ba2f', 'url': 'https://binance.com'},
+        'venmo': {'name': 'Venmo', 'primary_color': '#3d95ce', 'url': 'https://venmo.com'},
+        'paypal': {'name': 'PayPal', 'primary_color': '#003087', 'url': 'https://paypal.com'},
+    }
 
 
 class PlaidWebhookSerializer(serializers.ModelSerializer):

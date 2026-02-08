@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import { Collapse } from '@mui/material';
+import { Collapse, Menu, MenuItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
@@ -13,12 +13,17 @@ import {
   Savings as SavingsIcon,
   TrendingUp as InvestmentIcon,
   ChevronLeft as ChevronLeftIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  CurrencyBitcoin as CryptoIcon,
+  Link as LinkIcon,
+  UploadFile as UploadIcon
 } from '@mui/icons-material';
 import { usePlaidLink } from 'react-plaid-link';
 import { useSnackbar } from 'notistack';
 import { createLinkToken, exchangePublicToken, upgradeInstitutionForInvestments } from '../services/api';
 import Tooltip from '@mui/material/Tooltip';
+import AddManualAccountDialog from './AddManualAccountDialog';
+import PDFImportDialog from './PDFImportDialog';
 
 const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccountAdded, onClose, onRefresh }) => {
   const [expandedSections, setExpandedSections] = useState({
@@ -33,6 +38,11 @@ const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccou
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
+
+  // Add account menu and manual dialog state
+  const [addMenuAnchor, setAddMenuAnchor] = useState(null);
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [pdfImportOpen, setPdfImportOpen] = useState(false);
 
   // Resize state
   const [sidebarWidth, setSidebarWidth] = useState(280);
@@ -484,12 +494,63 @@ const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccou
             <RefreshIcon className={isRefreshing ? "spinning" : ""} />
           </HeaderRefreshButton>
           <HeaderAddButton
-            onClick={handleAddAccountClick}
-            disabled={!ready || !linkToken}
-            title={linkToken && ready ? "Add New Account" : "Loading Plaid..."}
+            onClick={(e) => setAddMenuAnchor(e.currentTarget)}
+            title="Add Account"
           >
             <AddIcon />
           </HeaderAddButton>
+          <Menu
+            anchorEl={addMenuAnchor}
+            open={Boolean(addMenuAnchor)}
+            onClose={() => setAddMenuAnchor(null)}
+            PaperProps={{
+              sx: {
+                background: 'linear-gradient(145deg, #1a1a2e 0%, #16213e 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.2)',
+                borderRadius: '12px',
+                minWidth: '200px',
+              }
+            }}
+          >
+            <MenuItem
+              onClick={() => {
+                setAddMenuAnchor(null);
+                handleAddAccountClick();
+              }}
+              disabled={!ready || !linkToken}
+              sx={{ color: '#fff', '&:hover': { background: 'rgba(99, 102, 241, 0.15)' } }}
+            >
+              <ListItemIcon>
+                <LinkIcon sx={{ color: '#818cf8' }} />
+              </ListItemIcon>
+              <ListItemText primary="Link Bank Account" secondary="Connect via Plaid" secondaryTypographyProps={{ sx: { color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' } }} />
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setAddMenuAnchor(null);
+                setManualDialogOpen(true);
+              }}
+              sx={{ color: '#fff', '&:hover': { background: 'rgba(99, 102, 241, 0.15)' } }}
+            >
+              <ListItemIcon>
+                <CryptoIcon sx={{ color: '#818cf8' }} />
+              </ListItemIcon>
+              <ListItemText primary="Add Manual Account" secondary="Coinbase, Robinhood, etc." secondaryTypographyProps={{ sx: { color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' } }} />
+            </MenuItem>
+            <Divider sx={{ borderColor: 'rgba(99, 102, 241, 0.15)', my: 0.5 }} />
+            <MenuItem
+              onClick={() => {
+                setAddMenuAnchor(null);
+                setPdfImportOpen(true);
+              }}
+              sx={{ color: '#fff', '&:hover': { background: 'rgba(99, 102, 241, 0.15)' } }}
+            >
+              <ListItemIcon>
+                <UploadIcon sx={{ color: '#818cf8' }} />
+              </ListItemIcon>
+              <ListItemText primary="Import from PDF" secondary="Upload statement PDF" secondaryTypographyProps={{ sx: { color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' } }} />
+            </MenuItem>
+          </Menu>
         </HeaderRight>
       </HeaderSection>
 
@@ -638,6 +699,31 @@ const AccountsSidebar = ({ accounts, loading, selectedAccount, onSelect, onAccou
           </EmptyStateContainer>
         )}
       </AccountSections>
+
+      {/* Manual Account Dialog */}
+      <AddManualAccountDialog
+        open={manualDialogOpen}
+        onClose={() => setManualDialogOpen(false)}
+        onSuccess={() => {
+          setManualDialogOpen(false);
+          if (onAccountAdded) {
+            onAccountAdded();
+          }
+        }}
+      />
+
+      {/* PDF Import Dialog */}
+      <PDFImportDialog
+        open={pdfImportOpen}
+        onClose={() => setPdfImportOpen(false)}
+        onSuccess={() => {
+          setPdfImportOpen(false);
+          if (onAccountAdded) {
+            onAccountAdded();
+          }
+        }}
+        accounts={accounts}
+      />
     </SidebarRoot>
   );
 };

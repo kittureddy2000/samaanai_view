@@ -936,12 +936,12 @@ const FinanceDashboard = ({ accounts, loading }) => {
       {error && <ErrorOverlay>{error}</ErrorOverlay>}
 
       <Paper elevation={0} sx={{
-        padding: '12px',
+        padding: '16px 20px',
         marginBottom: '16px',
-        background: 'rgba(26, 26, 46, 0.8)',
+        background: 'linear-gradient(145deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.95) 100%)',
         backdropFilter: 'blur(10px)',
         border: '1px solid rgba(99, 102, 241, 0.2)',
-        borderRadius: '12px',
+        borderRadius: '16px',
         '& .MuiInputBase-root': {
           color: '#fff',
           backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -965,9 +965,135 @@ const FinanceDashboard = ({ accounts, loading }) => {
           color: '#818cf8',
         },
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-          {/* Single row with all filters - fills full width */}
-          <FormControl sx={{ flex: 1, minWidth: 140 }}>
+        {/* Quick Date Range Presets */}
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          mb: 2,
+          flexWrap: 'wrap'
+        }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'rgba(255,255,255,0.6)',
+              mr: 1,
+              fontWeight: 500,
+              fontSize: '0.8rem'
+            }}
+          >
+            Quick Range:
+          </Typography>
+          {[
+            {
+              label: 'Today',
+              getRange: () => {
+                const today = new Date().toISOString().slice(0, 10);
+                return { start: today, end: today };
+              }
+            },
+            {
+              label: 'This Week',
+              getRange: () => {
+                const now = new Date();
+                const startOfWeek = new Date(now);
+                startOfWeek.setDate(now.getDate() - now.getDay());
+                return {
+                  start: startOfWeek.toISOString().slice(0, 10),
+                  end: now.toISOString().slice(0, 10)
+                };
+              }
+            },
+            {
+              label: 'This Month',
+              getRange: () => {
+                const now = new Date();
+                return {
+                  start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
+                  end: now.toISOString().slice(0, 10)
+                };
+              }
+            },
+            {
+              label: 'Last Month',
+              getRange: () => {
+                const now = new Date();
+                const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+                return {
+                  start: lastMonth.toISOString().slice(0, 10),
+                  end: lastDay.toISOString().slice(0, 10)
+                };
+              }
+            },
+            {
+              label: 'Last 90 Days',
+              getRange: () => {
+                const now = new Date();
+                const past = new Date(now);
+                past.setDate(now.getDate() - 90);
+                return {
+                  start: past.toISOString().slice(0, 10),
+                  end: now.toISOString().slice(0, 10)
+                };
+              }
+            },
+            {
+              label: 'YTD',
+              getRange: () => {
+                const now = new Date();
+                return {
+                  start: new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10),
+                  end: now.toISOString().slice(0, 10)
+                };
+              }
+            },
+            {
+              label: 'Last Year',
+              getRange: () => {
+                const now = new Date();
+                const lastYear = now.getFullYear() - 1;
+                return {
+                  start: new Date(lastYear, 0, 1).toISOString().slice(0, 10),
+                  end: new Date(lastYear, 11, 31).toISOString().slice(0, 10)
+                };
+              }
+            },
+          ].map(preset => (
+            <Button
+              key={preset.label}
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                const range = preset.getRange();
+                setPendingDateRange(range);
+                setDateRange(range);
+                setFilters({ ...pendingFilters });
+              }}
+              sx={{
+                color: 'rgba(255,255,255,0.8)',
+                borderColor: 'rgba(99, 102, 241, 0.3)',
+                fontSize: '0.75rem',
+                padding: '4px 12px',
+                borderRadius: '20px',
+                textTransform: 'none',
+                fontWeight: 500,
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  borderColor: '#818cf8',
+                  backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                  color: '#fff',
+                },
+              }}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </Box>
+
+        {/* Main Filters Row */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', flexWrap: 'wrap' }}>
+          <FormControl sx={{ flex: '1 1 140px', minWidth: 140, maxWidth: 160 }}>
             <TextField
               label="Start Date"
               type="date"
@@ -978,7 +1104,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
               fullWidth
             />
           </FormControl>
-          <FormControl sx={{ flex: 1, minWidth: 140 }}>
+          <FormControl sx={{ flex: '1 1 140px', minWidth: 140, maxWidth: 160 }}>
             <TextField
               label="End Date"
               type="date"
@@ -989,7 +1115,16 @@ const FinanceDashboard = ({ accounts, loading }) => {
               fullWidth
             />
           </FormControl>
-          <FormControl sx={{ flex: 1.2, minWidth: 150 }} size="small">
+
+          <Box sx={{
+            height: '24px',
+            width: '1px',
+            bgcolor: 'rgba(99, 102, 241, 0.3)',
+            mx: 1,
+            display: { xs: 'none', md: 'block' }
+          }} />
+
+          <FormControl sx={{ flex: '1 1 150px', minWidth: 150 }} size="small">
             <InputLabel>Institution</InputLabel>
             <Select
               value={pendingFilters.institution}
@@ -1001,7 +1136,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
               {Array.isArray(institutions) ? institutions.map(inst => <MenuItem key={inst.id || inst.plaid_institution_id} value={inst.plaid_institution_id}>{inst.name}</MenuItem>) : []}
             </Select>
           </FormControl>
-          <FormControl sx={{ flex: 1, minWidth: 130 }} size="small">
+          <FormControl sx={{ flex: '1 1 130px', minWidth: 130 }} size="small">
             <InputLabel>Account</InputLabel>
             <Select
               value={pendingFilters.account}
@@ -1016,7 +1151,7 @@ const FinanceDashboard = ({ accounts, loading }) => {
                 .map(acc => <MenuItem key={acc.id || acc.plaid_account_id} value={acc.plaid_account_id}>{acc.name}</MenuItem>) : []}
             </Select>
           </FormControl>
-          <FormControl sx={{ flex: 1, minWidth: 120 }} size="small">
+          <FormControl sx={{ flex: '1 1 120px', minWidth: 120 }} size="small">
             <InputLabel>Category</InputLabel>
             <Select
               value={pendingFilters.category}
@@ -1032,10 +1167,17 @@ const FinanceDashboard = ({ accounts, loading }) => {
             variant="contained"
             onClick={applyFilters}
             sx={{
-              minWidth: 120,
+              minWidth: 130,
               height: 40,
-              bgcolor: '#6366f1',
-              '&:hover': { bgcolor: '#4f46e5' }
+              background: 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)',
+              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)',
+              borderRadius: '8px',
+              fontWeight: 600,
+              textTransform: 'none',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #5558e3 0%, #7477ea 100%)',
+                boxShadow: '0 6px 20px rgba(99, 102, 241, 0.4)',
+              }
             }}
           >
             Apply Filters

@@ -186,4 +186,45 @@ export const updateAccountCustomName = async (accountId, customName) => {
   }
 };
 
+// Create a manual account (Coinbase, Robinhood, etc.)
+export const createManualAccount = async (accountData) => {
+  try {
+    const response = await api.post(withBase('/accounts/create-manual/'), accountData);
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error creating manual account');
+  }
+};
+
+// Upload PDF for transaction extraction (returns preview)
+export const importPDFTransactions = async (file, accountId) => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('account_id', accountId);
+
+    const response = await api.post(withBase('/import/pdf/'), formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error processing PDF');
+  }
+};
+
+// Confirm PDF import (creates transactions)
+export const confirmPDFImport = async (importId, transactions = null) => {
+  try {
+    const response = await api.post(withBase('/import/pdf/confirm/'), {
+      import_id: importId,
+      transactions: transactions,
+    });
+    return response.data;
+  } catch (error) {
+    handleError(error, 'Error confirming PDF import');
+  }
+};
+
 export default api;

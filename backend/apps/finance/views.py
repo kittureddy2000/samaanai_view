@@ -403,9 +403,10 @@ class AccountViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
+        # Include both Plaid-linked accounts (via institution) and manual accounts (via user)
         return Account.objects.filter(
-            institution__user=self.request.user
-        ).select_related('institution')
+            Q(institution__user=self.request.user) | Q(user=self.request.user)
+        ).select_related('institution').distinct()
     
     @action(detail=True, methods=['post'])
     def toggle_selected(self, request, pk=None):
@@ -428,6 +429,102 @@ class AccountViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(account)
         return Response(serializer.data)
+
+
+class CreateManualAccountView(views.APIView):
+    """Create a manual institution and account (not from Plaid)"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    # Common preset institutions for quick selection
+    PRESET_INSTITUTIONS = {
+        'coinbase': {'name': 'Coinbase', 'primary_color': '#0052ff', 'url': 'https://coinbase.com'},
+        'robinhood': {'name': 'Robinhood', 'primary_color': '#00c805', 'url': 'https://robinhood.com'},
+        'crypto.com': {'name': 'Crypto.com', 'primary_color': '#103f68', 'url': 'https://crypto.com'},
+        'binance': {'name': 'Binance', 'primary_color': '#f3ba2f', 'url': 'https://binance.com'},
+        'venmo': {'name': 'Venmo', 'primary_color': '#3d95ce', 'url': 'https://venmo.com'},
+        'paypal': {'name': 'PayPal', 'primary_color': '#003087', 'url': 'https://paypal.com'},
+        'cash_app': {'name': 'Cash App', 'primary_color': '#00d632', 'url': 'https://cash.app'},
+    }
+    
+    def post(self, request):
+        """
+        Create a manual institution (if needed) and account.
+        
+        Request body:
+        {
+            "institution_name": "Coinbase",
+            "account_name": "My Coinbase Account",
+            "account_type": "investment",  # depository, credit, loan, investment, other
+            "account_subtype": "brokerage",  # optional
+            "current_balance": 0  # optional, defaults to 0
+        }
+        """
+        institution_name = request.data.get('institution_name', '').strip()
+        account_name = request.data.get('account_name', '').strip()
+        account_type = request.data.get('account_type', 'other')
+        account_subtype = request.data.get('account_subtype', 'other')
+        current_balance = request.data.get('current_balance', 0)
+        
+        if not institution_name:
+            return Response(
+                {"error": "institution_name is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not account_name:
+            return Response(
+                {"error": "account_name is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Check for preset institution metadata
+            preset_key = institution_name.lower().replace(' ', '_').replace('.', '')
+            preset_data = self.PRESET_INSTITUTIONS.get(preset_key, {})
+            
+            # Get or create the manual institution
+            institution, created = Institution.objects.get_or_create(
+                user=request.user,
+                name=preset_data.get('name', institution_name),
+                is_manual=True,
+                defaults={
+                    'primary_color': preset_data.get('primary_color'),
+                    'url': preset_data.get('url'),
+                    'is_active': True,
+                }
+            )
+            
+            # Create the account
+            account = Account.objects.create(
+                institution=institution,
+                user=request.user,
+                name=account_name,
+                type=account_type,
+                subtype=account_subtype or 'other',
+                current_balance=current_balance,
+                is_manual=True,
+                is_active=True,
+                is_selected=True,
+            )
+            
+            # Serialize and return
+            account_serializer = AccountSerializer(account)
+            institution_serializer = InstitutionSerializer(institution)
+            
+            return Response({
+                "status": "success",
+                "message": f"Manual account '{account_name}' created successfully",
+                "institution": institution_serializer.data,
+                "account": account_serializer.data,
+                "institution_created": created,
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error creating manual account: {e}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class TransactionPagination(PageNumberPagination):
@@ -1330,3 +1427,190 @@ class CSVImportView(views.APIView):
         
         return result
 
+
+class PDFImportView(views.APIView):
+    """Import transactions from PDF documents using LLM extraction."""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    # In-memory cache for pending imports (in production, use Redis or DB)
+    _pending_imports = {}
+    
+    def post(self, request):
+        """
+        Extract transactions from a PDF file and return for preview.
+        
+        Request (multipart/form-data):
+        - file: PDF file
+        - account_id: UUID of target account
+        
+        Returns extracted transactions for preview before confirmation.
+        """
+        from .services.pdf_extractor import PDFTransactionExtractor
+        
+        pdf_file = request.FILES.get('file')
+        account_id = request.data.get('account_id')
+        
+        if not pdf_file:
+            return Response(
+                {"error": "No file provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not account_id:
+            return Response(
+                {"error": "account_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify user owns the account
+        try:
+            account = Account.objects.get(
+                Q(id=account_id, institution__user=request.user) |
+                Q(id=account_id, user=request.user)
+            )
+        except Account.DoesNotExist:
+            return Response(
+                {"error": "Account not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check file type
+        if not pdf_file.name.lower().endswith('.pdf'):
+            return Response(
+                {"error": "File must be a PDF"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Extract transactions from PDF
+            extractor = PDFTransactionExtractor()
+            result = extractor.extract_transactions(pdf_file)
+            
+            if not result['transactions']:
+                return Response({
+                    "status": "no_transactions",
+                    "message": "No transactions could be extracted from the PDF",
+                    "metadata": result['metadata']
+                })
+            
+            # Generate import ID for confirmation
+            import_id = str(uuid.uuid4())
+            
+            # Store pending import (with expiry in production)
+            self._pending_imports[import_id] = {
+                'user_id': request.user.id,
+                'account_id': str(account.id),
+                'transactions': result['transactions'],
+                'created_at': timezone.now().isoformat(),
+            }
+            
+            return Response({
+                "status": "preview",
+                "import_id": import_id,
+                "account": {
+                    "id": str(account.id),
+                    "name": account.name,
+                },
+                "transactions": result['transactions'],
+                "metadata": result['metadata'],
+            })
+            
+        except ValueError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error extracting transactions from PDF: {e}")
+            return Response(
+                {"error": "Failed to process PDF. Please ensure it's a valid financial statement."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class PDFImportConfirmView(views.APIView):
+    """Confirm and create transactions from PDF import."""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        """
+        Confirm the PDF import and create transactions.
+        
+        Request:
+        - import_id: ID from the preview response
+        - transactions: Optional modified transactions list
+        """
+        import_id = request.data.get('import_id')
+        modified_transactions = request.data.get('transactions')
+        
+        if not import_id:
+            return Response(
+                {"error": "import_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get pending import
+        pending = PDFImportView._pending_imports.get(import_id)
+        
+        if not pending:
+            return Response(
+                {"error": "Import not found or expired. Please re-upload the PDF."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Verify user
+        if pending['user_id'] != request.user.id:
+            return Response(
+                {"error": "Unauthorized"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get account
+        try:
+            account = Account.objects.get(id=pending['account_id'])
+        except Account.DoesNotExist:
+            return Response(
+                {"error": "Account no longer exists"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Use modified transactions if provided, otherwise use original
+        transactions = modified_transactions if modified_transactions else pending['transactions']
+        
+        # Create transactions
+        created_count = 0
+        errors = []
+        
+        for txn in transactions:
+            try:
+                # Parse date
+                try:
+                    tx_date = datetime.strptime(txn['date'], '%Y-%m-%d').date()
+                except (ValueError, KeyError):
+                    tx_date = timezone.now().date()
+                
+                # Create transaction
+                Transaction.objects.create(
+                    account=account,
+                    plaid_transaction_id=f"pdf_import_{uuid.uuid4()}",
+                    amount=float(txn.get('amount', 0)),
+                    name=txn.get('description', 'PDF Import')[:200],
+                    merchant_name=txn.get('description', '')[:100],
+                    primary_category=txn.get('category', 'OTHER'),
+                    date=tx_date,
+                    pending=False,
+                    is_manual=True,
+                )
+                created_count += 1
+                
+            except Exception as e:
+                errors.append(str(e))
+        
+        # Clean up pending import
+        del PDFImportView._pending_imports[import_id]
+        
+        return Response({
+            "status": "success",
+            "transactions_created": created_count,
+            "errors": errors,
+        })

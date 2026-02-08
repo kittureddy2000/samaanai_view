@@ -11,15 +11,18 @@ class Institution(models.Model):
     """Financial institution linked via Plaid"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='institutions')
-    plaid_institution_id = models.CharField(max_length=100)
+    plaid_institution_id = models.CharField(max_length=100, blank=True, null=True)
     name = models.CharField(max_length=200)
     logo_url = models.URLField(blank=True, null=True)
     primary_color = models.CharField(max_length=7, blank=True, null=True)  # Hex color
     url = models.URLField(blank=True, null=True)
     
-    # Plaid connection data
-    access_token = EncryptedTextField()
-    item_id = models.CharField(max_length=100, unique=True)
+    # Plaid connection data (optional for manual institutions)
+    access_token = EncryptedTextField(blank=True, null=True)
+    item_id = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    
+    # Manual institution flag
+    is_manual = models.BooleanField(default=False)
     sync_cursor = models.TextField(blank=True, null=True)  # Plaid transaction sync cursor
     
     # Status tracking
@@ -41,7 +44,7 @@ class Institution(models.Model):
 
 
 class Account(models.Model):
-    """Individual bank account or investment account"""
+    """Individual bank account or investment account (linked via Plaid or manual)"""
     ACCOUNT_TYPE_CHOICES = [
         ('depository', 'Depository'),
         ('credit', 'Credit'),
@@ -106,8 +109,14 @@ class Account(models.Model):
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='accounts')
-    plaid_account_id = models.CharField(max_length=100, unique=True)
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='accounts', null=True, blank=True)
+    plaid_account_id = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    
+    # User reference (for manual accounts without institution)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='manual_accounts', null=True, blank=True)
+    
+    # Manual account flag
+    is_manual = models.BooleanField(default=False)
     
     # Account info
     name = models.CharField(max_length=200)

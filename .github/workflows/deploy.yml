@@ -94,7 +94,7 @@ jobs:
             --no-cpu-throttling \
             --cpu-boost \
             --set-cloudsql-instances=${{ env.CLOUD_SQL_INSTANCE }} \
-            --set-secrets="SECRET_KEY=FINANCE_SECRET_KEY:latest,DATABASE_URL=FINANCE_DATABASE_URL:latest,PLAID_CLIENT_ID=FINANCE_PLAID_CLIENT_ID:latest,PLAID_SECRET_PRODUCTION=FINANCE_PLAID_SECRET:latest,PLAID_ENCRYPTION_KEY=FINANCE_PLAID_ENCRYPTION_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest" \
+            --set-secrets="SECRET_KEY=FINANCE_SECRET_KEY:latest,DATABASE_URL=FINANCE_DATABASE_URL:latest,PLAID_CLIENT_ID=FINANCE_PLAID_CLIENT_ID:latest,PLAID_SECRET_PRODUCTION=FINANCE_PLAID_SECRET:latest,PLAID_ENCRYPTION_KEY=FINANCE_PLAID_ENCRYPTION_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,GEMINI_API_KEY=FINANCE_GEMINI_API_KEY:latest" \
             --set-env-vars="^##^ENVIRONMENT=production##PLAID_ENV=production##ALLOWED_HOSTS=.run.app,.a.run.app,finance.samaanai.com,api.finance.samaanai.com##DEBUG=False##FRONTEND_URL=https://finance.samaanai.com##CORS_ALLOWED_ORIGINS=https://finance.samaanai.com,https://samaanai-finance-frontend-172298808029.us-west1.run.app##CUSTOM_API_DOMAIN=https://api.finance.samaanai.com"
 
       - name: Get backend URL

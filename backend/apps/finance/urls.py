@@ -10,11 +10,14 @@ from .views import (
     InvestmentTransactionViewSet,
     CreateLinkTokenView,
     ExchangePublicTokenView,
+    CreateManualAccountView,
     DashboardView,
     MonthlySpendingView,
     NetWorthTrendView,
     PlaidWebhookView,
-    CSVImportView
+    CSVImportView,
+    PDFImportView,
+    PDFImportConfirmView
 )
 
 router = DefaultRouter()
@@ -31,8 +34,11 @@ urlpatterns = [
     path('plaid/create-link-token/', CreateLinkTokenView.as_view(), name='plaid-create-link-token'),
     path('plaid/exchange-public-token/', ExchangePublicTokenView.as_view(), name='plaid-exchange-public-token'),
     path('plaid/webhook/', PlaidWebhookView.as_view(), name='plaid-webhook'),
+    path('accounts/create-manual/', CreateManualAccountView.as_view(), name='create-manual-account'),
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('reports/monthly-spending/', MonthlySpendingView.as_view(), name='monthly-spending'),
     path('reports/net-worth-trend/', NetWorthTrendView.as_view(), name='net-worth-trend'),
     path('import/csv/', CSVImportView.as_view(), name='csv-import'),
+    path('import/pdf/', PDFImportView.as_view(), name='pdf-import'),
+    path('import/pdf/confirm/', PDFImportConfirmView.as_view(), name='pdf-import-confirm'),
 ] 
