@@ -1185,60 +1185,57 @@ const FinanceDashboard = ({ accounts, loading }) => {
         </Box>
       </Paper>
 
-      <TilesContainer>
-        <TileRow>
-          <TileWrapper>
-            <WidgetCard sx={{ height: '420px !important', width: '100%', minHeight: '420px' }}>
-              <ChartTitle>Monthly Spending (Click bar to filter)</ChartTitle>
-              <ChartContainer ref={monthlySpendingContainerRef}>
-                {monthlySpendingChartData ? (
-                  <Bar
-                    ref={monthlySpendingRef}
-                    data={monthlySpendingChartData}
-                    options={chartOptions}
-                  />
-                ) : (
-                  <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: '280px',
-                    color: '#6b7280'
-                  }}>
-                    <Typography>No spending data available</Typography>
-                  </Box>
-                )}
-              </ChartContainer>
-            </WidgetCard>
-          </TileWrapper>
+      {/* Charts Grid */}
+      <DashboardGrid>
+        {/* Monthly Spending Chart */}
+        <WidgetCard>
+          <ChartTitle>Monthly Spending (Click bar to filter)</ChartTitle>
+          <ChartContainer ref={monthlySpendingContainerRef}>
+            {monthlySpendingChartData ? (
+              <Bar
+                ref={monthlySpendingRef}
+                data={monthlySpendingChartData}
+                options={chartOptions}
+              />
+            ) : (
+              <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '280px',
+                color: '#6b7280'
+              }}>
+                <Typography>No spending data available</Typography>
+              </Box>
+            )}
+          </ChartContainer>
+        </WidgetCard>
 
-          <TileWrapper>
-            <WidgetCard sx={{ height: '420px !important', width: '100%', minHeight: '420px' }}>
-              <ChartTitle>Category Breakdown (Click to filter)</ChartTitle>
-              <ChartContainer ref={categoryPieContainerRef}>
-                <SpendingCategoryDrilldown
-                  spendingData={dashboard?.spending_by_category || []}
-                  transactions={(dashboard?.recent_transactions || []).filter(tx => !tx.exclude_from_reports)}
-                  onCategorySelect={(category) => {
-                    if (category && category.primary_category) {
-                      // Toggle filter - if same category clicked, clear filter
-                      if (chartFilter.type === 'category' && chartFilter.value === category.primary_category) {
-                        setChartFilter({ type: null, value: null, label: '' });
-                      } else {
-                        const label = category.primary_category.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-                        setChartFilter({ type: 'category', value: category.primary_category, label });
-                      }
-                    }
-                  }}
-                />
-              </ChartContainer>
-            </WidgetCard>
-          </TileWrapper>
-        </TileRow>
-      </TilesContainer>
+        {/* Category Breakdown Chart */}
+        <WidgetCard>
+          <ChartTitle>Category Breakdown (Click to filter)</ChartTitle>
+          <ChartContainer ref={categoryPieContainerRef}>
+            <SpendingCategoryDrilldown
+              spendingData={dashboard?.spending_by_category || []}
+              transactions={(dashboard?.recent_transactions || []).filter(tx => !tx.exclude_from_reports)}
+              onCategorySelect={(category) => {
+                if (category && category.primary_category) {
+                  // Toggle filter - if same category clicked, clear filter
+                  if (chartFilter.type === 'category' && chartFilter.value === category.primary_category) {
+                    setChartFilter({ type: null, value: null, label: '' });
+                  } else {
+                    const label = category.primary_category.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+                    setChartFilter({ type: 'category', value: category.primary_category, label });
+                  }
+                }
+              }}
+            />
+          </ChartContainer>
+        </WidgetCard>
+      </DashboardGrid>
 
       {/* Transactions Table */}
-      <TransactionCard style={{ marginTop: '16px' }}>
+      <TransactionCard>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff' }}>
             Recent Transactions
@@ -1517,19 +1514,83 @@ const FinanceDashboard = ({ accounts, loading }) => {
   );
 };
 
+
 const DashboardContainer = styled.div`
-  max-width: 1600px;
+  max-width: 1800px;
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 24px;
   width: 100%;
+  
+  @media (max-width: 768px) {
+    padding: 16px;
+  }
+`;
+
+const DashboardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 24px;
+  
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+`;
+
+const Card = styled.div`
+  background: rgba(26, 26, 46, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  
+  @media (max-width: 768px) {
+    padding: 16px;
+  }
+`;
+
+const FullWidthCard = styled(Card)`
+  grid-column: 1 / -1;
+`;
+
+const SummaryCard = styled(Card)`
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+`;
+
+const SummaryTitle = styled.h3`
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const SummaryValue = styled.div`
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+  
+  @media (max-width: 768px) {
+    font-size: 2rem;
+  }
+`;
+
+const SummarySubtext = styled.div`
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
 `;
 
 const LoadingOverlay = styled.div`
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100%;\n  height: 100%;
   background: rgba(255, 255, 255, 0.7);
   display: flex;
   justify-content: center;
@@ -1552,20 +1613,19 @@ const ErrorOverlay = styled.div`
   font-weight: bold;
 `;
 
-const WidgetCard = styled.div`
-  background: rgba(26, 26, 46, 0.8);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  height: 380px !important;
-  min-height: 380px !important;
-  max-height: 380px !important;
+const WidgetCard = styled(Card)`
+  height: 400px !important;
+  min-height: 400px !important;
+  max-height: 400px !important;
   display: flex;
   flex-direction: column;
-  width: 100% !important;
-  box-sizing: border-box;
+  padding: 20px;
+  
+  @media (max-width: 900px) {
+    height: 350px !important;
+    min-height: 350px !important;
+    max-height: 350px !important;
+  }
 `;
 
 const ChartContainer = styled.div.withConfig({
@@ -1597,13 +1657,7 @@ const ChartContent = styled.div`
   min-height: 0;
 `;
 
-const TransactionCard = styled.div`
-  background: rgba(26, 26, 46, 0.8);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+const TransactionCard = styled(FullWidthCard)`
   height: 600px;
   display: flex;
   flex-direction: column;
@@ -1680,31 +1734,5 @@ const SortableHeader = styled.th`
   }
 `;
 
-const TilesContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-`;
+export default FinanceDashboard;
 
-const TileRow = styled.div`
-  display: flex;
-  gap: 12px;
-  width: 100%;
-
-  @media (max-width: 900px) {
-    flex-direction: column;
-  }
-`;
-
-const TileWrapper = styled.div`
-  flex: 1;
-  width: 50%;
-  min-width: 0;
-  
-  @media (max-width: 900px) {
-    width: 100%;
-  }
-`;
-
-export default FinanceDashboard; 
