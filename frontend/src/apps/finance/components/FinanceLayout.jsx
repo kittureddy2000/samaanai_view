@@ -11,10 +11,12 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { Typography, Box } from '@mui/material';
 import { useAuth } from '../../../common/auth';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
+import { format } from 'date-fns';
 
 // Simple AccountsOverview component
 const AccountsOverview = ({ accounts, loading }) => {
@@ -45,6 +47,8 @@ const FinanceLayout = () => {
   const [showAccountsSidebar, setShowAccountsSidebar] = useState(true);
   const [dashboardKey, setDashboardKey] = useState(0); // Add key to force dashboard refresh
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -98,9 +102,11 @@ const FinanceLayout = () => {
   // Refresh accounts data
   const refreshAccounts = async () => {
     try {
+      setIsRefreshing(true);
       setLoading(true);
       const freshAccounts = await refreshAccountBalances();
       setAccounts(freshAccounts);
+      setLastUpdated(new Date());
 
       // Force dashboard to refresh by updating key
       setDashboardKey(prev => prev + 1);
@@ -109,6 +115,7 @@ const FinanceLayout = () => {
       throw error; // Re-throw so AccountsSidebar can handle the error
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -138,6 +145,48 @@ const FinanceLayout = () => {
 
   return (
     <FinanceWrapper>
+      <FinanceHeader>
+        <HeaderContent>
+          <HeaderLeft>
+            <LogoSection>
+              <span style={{ fontSize: '1.5rem' }}>💎</span>
+              <HeaderTitle>Samaanai</HeaderTitle>
+            </LogoSection>
+          </HeaderLeft>
+
+          <HeaderRight>
+            <LastUpdated>
+              Last updated: {format(lastUpdated, 'h:mm:ss a')}
+            </LastUpdated>
+
+            <RefreshButton onClick={refreshAccounts} disabled={isRefreshing}>
+              <RefreshIcon sx={{ fontSize: 18, animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+              Refresh
+            </RefreshButton>
+
+            <UserMenuContainer>
+              <UserMenuButton onClick={() => setUserMenuOpen(!userMenuOpen)}>
+                <PersonIcon sx={{ fontSize: 20 }} />
+                <span>{currentUser?.username || 'User'}</span>
+                <KeyboardArrowDownIcon sx={{ fontSize: 18 }} />
+              </UserMenuButton>
+
+              {userMenuOpen && (
+                <>
+                  <UserMenuOverlay onClick={() => setUserMenuOpen(false)} />
+                  <UserDropdown>
+                    <DropdownItem onClick={handleLogout}>
+                      <LogoutIcon sx={{ fontSize: 18, marginRight: '8px' }} />
+                      Logout
+                    </DropdownItem>
+                  </UserDropdown>
+                </>
+              )}
+            </UserMenuContainer>
+          </HeaderRight>
+        </HeaderContent>
+      </FinanceHeader>
+
       <LayoutRoot>
         <FinanceSidebar
           currentView={currentView}
@@ -230,16 +279,21 @@ const FinanceWrapper = styled.div`
 `;
 
 const FinanceHeader = styled.header`
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: #0a0a0f;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   color: #fff;
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
-  height: 64px;
+  height: 60px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   position: sticky;
   top: 0;
   z-index: 1000;
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 `;
 
 const HeaderContent = styled.div`
@@ -325,8 +379,48 @@ const HeaderRight = styled.div`
   gap: 16px;
 `;
 
+const LastUpdated = styled.div`
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 400;
+`;
+
+const RefreshButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.25);
+    border-color: rgba(99, 102, 241, 0.45);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
 const UserMenuContainer = styled.div`
   position: relative;
+`;
+
+const UserMenuOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
 `;
 
 const UserMenuButton = styled.button`
@@ -386,8 +480,7 @@ const LayoutRoot = styled.div`
   align-items: stretch;
   background: #0f0f1a;
   overflow: hidden;
-  margin-top: 8px;
-  height: calc(100vh - 80px); /* Explicit height for scrolling children */
+  height: calc(100vh - 60px); /* Account for 60px header */
 `;
 
 const MainContent = styled.div`
