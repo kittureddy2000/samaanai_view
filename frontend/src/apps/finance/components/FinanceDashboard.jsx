@@ -1516,25 +1516,30 @@ const FinanceDashboard = ({ accounts, loading }) => {
 
 
 const DashboardContainer = styled.div`
-  max-width: 1800px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 24px;
   width: 100%;
   
   @media (max-width: 768px) {
-    padding: 16px;
+    padding: 12px;
   }
 `;
 
 const DashboardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 16px;
   margin-bottom: 24px;
   
-  @media (max-width: 1200px) {
-    grid-template-columns: 1fr;
-    gap: 16px;
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  
+  @media (min-width: 1280px) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
   }
 `;
 
@@ -1542,12 +1547,13 @@ const Card = styled.div`
   background: rgba(26, 26, 46, 0.6);
   backdrop-filter: blur(10px);
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(99, 102, 241, 0.15);
   
   @media (max-width: 768px) {
     padding: 16px;
+    border-radius: 8px;
   }
 `;
 
@@ -1577,20 +1583,20 @@ const SummaryValue = styled.div`
   margin-bottom: 8px;
   
   @media (max-width: 768px) {
-    font-size: 2rem;
+    font-size: 1.75rem;
   }
 `;
 
 const SummarySubtext = styled.div`
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.5);
-`;
+  color: rgba(255, 255, 255, 0.5);\n`;
 
 const LoadingOverlay = styled.div`
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;\n  height: 100%;
+  width: 100%;
+  height: 100%;
   background: rgba(255, 255, 255, 0.7);
   display: flex;
   justify-content: center;
@@ -1614,17 +1620,18 @@ const ErrorOverlay = styled.div`
 `;
 
 const WidgetCard = styled(Card)`
-  height: 400px !important;
-  min-height: 400px !important;
-  max-height: 400px !important;
+  height: 380px !important;
+  min-height: 380px !important;
+  max-height: 380px !important;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 18px;
   
   @media (max-width: 900px) {
-    height: 350px !important;
-    min-height: 350px !important;
-    max-height: 350px !important;
+    height: 320px !important;
+    min-height: 320px !important;
+    max-height: 320px !important;
+    padding: 14px;
   }
 `;
 
