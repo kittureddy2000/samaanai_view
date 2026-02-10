@@ -101,15 +101,22 @@ Return ONLY the JSON array, no other text."""
             )
             
             response_text = response.text.strip()
+            logger.info(f"LLM Response: {response_text[:1000]}") # Log first 1000 chars
             
             # Try to extract JSON from the response
             transactions = self._parse_json_response(response_text)
             
+            if not isinstance(transactions, list):
+                logger.warning(f"Parsed JSON is not a list: {type(transactions)}")
+                transactions = []
+
             # Validate and clean transactions
             return self._validate_transactions(transactions)
             
         except Exception as e:
+            import traceback
             logger.error(f"Error calling Gemini API: {e}")
+            logger.error(traceback.format_exc())
             raise ValueError(f"Failed to parse transactions: {str(e)}")
     
     def _parse_json_response(self, response_text: str) -> List[Dict]:
