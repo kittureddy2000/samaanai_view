@@ -308,7 +308,7 @@ class TransactionSyncService:
     
     def sync_institution_transactions(self, institution):
         """Sync all transactions for an institution"""
-        from .models import Transaction, Account
+        from apps.finance.models import Transaction, Account
         
         # Determine if this is the very first sync for the Plaid item
         initial_cursor = institution.sync_cursor if hasattr(institution, 'sync_cursor') else None
@@ -526,7 +526,7 @@ class InvestmentSyncService:
     
     def sync_institution_holdings(self, institution):
         """Sync investment holdings for an institution"""
-        from .models import Account, Security, Holding
+        from apps.finance.models import Account, Security, Holding
         
         try:
             # Only sync for investment accounts
@@ -612,7 +612,7 @@ class InvestmentSyncService:
     
     def sync_institution_investment_transactions(self, institution, start_date=None, end_date=None):
         """Sync investment transactions for an institution"""
-        from .models import Account, Security, InvestmentTransaction
+        from apps.finance.models import Account, Security, InvestmentTransaction
         
         if not start_date:
             start_date = (timezone.now() - timedelta(days=365)).date()
@@ -711,7 +711,7 @@ class AnalyticsService:
     
     def calculate_net_worth(self, user):
         """Calculate user's current net worth"""
-        from .models import Account
+        from apps.finance.models import Account
         
         accounts = Account.objects.filter(
             institution__user=user,
@@ -738,7 +738,7 @@ class AnalyticsService:
     
     def get_spending_by_category(self, user, start_date, end_date):
         """Get spending breakdown by category for a date range"""
-        from .models import Transaction
+        from apps.finance.models import Transaction
         from django.db.models import Sum, Count
         
         transactions = Transaction.objects.filter(
@@ -759,7 +759,7 @@ class AnalyticsService:
     
     def get_monthly_cash_flow(self, user, year, month):
         """Calculate monthly cash flow (income vs expenses)"""
-        from .models import Transaction
+        from apps.finance.models import Transaction
         from django.db.models import Sum
         
         # Get all transactions for the month
@@ -806,7 +806,7 @@ class RecurringTransactionDetectionService:
         - Appears 3+ times in the lookback period
         - Transactions are approximately evenly spaced
         """
-        from .models import Transaction, RecurringTransaction, SpendingCategory
+        from apps.finance.models import Transaction, RecurringTransaction, SpendingCategory
         from django.db.models import Count, Avg, StdDev
         from collections import defaultdict
         from datetime import timedelta
@@ -879,7 +879,7 @@ class RecurringTransactionDetectionService:
         Detect and optionally create RecurringTransaction records for the user.
         Returns list of detected patterns.
         """
-        from .models import RecurringTransaction, SpendingCategory
+        from apps.finance.models import RecurringTransaction, SpendingCategory
         from dateutil.relativedelta import relativedelta
         
         patterns = self.detect_recurring_transactions(user)
