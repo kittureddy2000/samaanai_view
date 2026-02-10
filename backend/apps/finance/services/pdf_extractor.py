@@ -117,7 +117,7 @@ Return ONLY the JSON array, no other text."""
             import traceback
             logger.error(f"Error calling Gemini API: {e}")
             logger.error(traceback.format_exc())
-            raise ValueError(f"Failed to parse transactions: {str(e)}")
+            raise ValueError(f"PDF Parsing Failed: {str(e)}")
     
     def _parse_json_response(self, response_text: str) -> List[Dict]:
         """Extract JSON array from LLM response."""
@@ -154,47 +154,74 @@ Return ONLY the JSON array, no other text."""
         logger.error(f"Could not parse JSON from response (first 500 chars): {response_text[:500]}")
         return []
     
+    
     def _validate_transactions(self, transactions: List[Dict]) -> List[Dict]:
         """Validate and clean extracted transactions."""
+        if not isinstance(transactions, list):
+            logger.warning(f"Expected list of transactions, got: {type(transactions)}")
+            return []
+            
         valid_transactions = []
         
-        for txn in transactions:
+        for i, txn in enumerate(transactions):
             try:
-                # Validate required fields
-                if not all(key in txn for key in ['date', 'description', 'amount']):
+                # Ensure txn is a dictionary
+                if not isinstance(txn, dict):
+                    logger.warning(f"Skipping non-dict transaction at index {i}: {type(txn)}")
+                    continue
+                
+                # Check for required fields using .get() to avoid KeyError
+                date_str = txn.get('date')
+                description = txn.get('description')
+                amount_val = txn.get('amount')
+                
+                if not date_str or description is None or amount_val is None:
+                    # Log missing fields for debugging
+                    missing = []
+                    if not date_str: missing.append('date')
+                    if description is None: missing.append('description')
+                    if amount_val is None: missing.append('amount')
+                    logger.warning(f"Transaction {i} missing fields: {missing}. Data: {txn}")
                     continue
                 
                 # Parse and validate date
-                date_str = txn['date']
+                parsed_date = None
                 try:
-                    parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+                    parsed_date = datetime.strptime(str(date_str), '%Y-%m-%d')
                 except ValueError:
                     # Try alternative formats
-                    for fmt in ['%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d', '%m-%d-%Y']:
+                    for fmt in ['%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d', '%m-%d-%Y', '%Y.%m.%d']:
                         try:
-                            parsed_date = datetime.strptime(date_str, fmt)
+                            parsed_date = datetime.strptime(str(date_str), fmt)
                             break
                         except ValueError:
                             continue
-                    else:
+                    
+                    if not parsed_date:
                         logger.warning(f"Could not parse date: {date_str}")
                         continue
                 
                 # Validate amount
                 try:
-                    amount = float(txn['amount'])
+                    # Remove currency symbols if present
+                    if isinstance(amount_val, str):
+                        amount_val = amount_val.replace('$', '').replace(',', '').strip()
+                    amount = float(amount_val)
                 except (ValueError, TypeError):
+                    logger.warning(f"Invalid amount format: {amount_val}")
                     continue
                 
                 valid_transactions.append({
                     'date': parsed_date.strftime('%Y-%m-%d'),
-                    'description': str(txn.get('description', ''))[:200],
+                    'description': str(description)[:200],
                     'amount': round(amount, 2),
-                    'category': txn.get('category', 'OTHER').upper(),
+                    'category': str(txn.get('category', 'OTHER')).upper(),
                 })
                 
             except Exception as e:
-                logger.warning(f"Error validating transaction {txn}: {e}")
+                logger.error(f"Error validating transaction {i}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 continue
         
         return valid_transactions
