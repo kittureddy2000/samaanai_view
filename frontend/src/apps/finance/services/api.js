@@ -189,7 +189,7 @@ export const updateAccountCustomName = async (accountId, customName) => {
 // Create a manual account (Coinbase, Robinhood, etc.)
 export const createManualAccount = async (accountData) => {
   try {
-    const response = await api.post(withBase('/accounts/create-manual/'), accountData);
+    const response = await api.post(withBase('/manual-accounts/create/'), accountData);
     return response.data;
   } catch (error) {
     handleError(error, 'Error creating manual account');
