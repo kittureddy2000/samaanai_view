@@ -114,21 +114,37 @@ Return ONLY the JSON array, no other text."""
     
     def _parse_json_response(self, response_text: str) -> List[Dict]:
         """Extract JSON array from LLM response."""
+        # Remove markdown code blocks if present
+        response_text = re.sub(r'```json\s*', '', response_text)
+        response_text = re.sub(r'```\s*', '', response_text)
+        response_text = response_text.strip()
+        
         # Try direct JSON parse first
         try:
-            return json.loads(response_text)
-        except json.JSONDecodeError:
-            pass
+            result = json.loads(response_text)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict) and 'transactions' in result:
+                return result['transactions']
+        except json.JSONDecodeError as e:
+            logger.warning(f"Direct JSON parse failed: {e}")
         
         # Try to find JSON array in the response
         json_match = re.search(r'\[[\s\S]*\]', response_text)
         if json_match:
             try:
                 return json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Regex extracted JSON parse failed: {e}")
         
-        logger.warning(f"Could not parse JSON from response: {response_text[:500]}")
+        # Try to unescape the response (handle double-escaped JSON)
+        try:
+            unescaped = response_text.encode().decode('unicode_escape')
+            return json.loads(unescaped)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.warning(f"Unescaped JSON parse failed: {e}")
+        
+        logger.error(f"Could not parse JSON from response (first 500 chars): {response_text[:500]}")
         return []
     
     def _validate_transactions(self, transactions: List[Dict]) -> List[Dict]:
