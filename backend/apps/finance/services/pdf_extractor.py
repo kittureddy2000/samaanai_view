@@ -93,7 +93,7 @@ Return ONLY the JSON array, no other text."""
         try:
             # Generate content using Gemini
             response = self.model.generate_content(
-                self.EXTRACTION_PROMPT.format(pdf_text=pdf_text),
+                self.EXTRACTION_PROMPT.replace('{pdf_text}', pdf_text),
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.1,  # Low temperature for consistent parsing
                     max_output_tokens=4096,
