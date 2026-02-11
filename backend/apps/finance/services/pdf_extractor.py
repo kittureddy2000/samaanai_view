@@ -11,7 +11,8 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 import pdfplumber
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -52,8 +53,7 @@ Return ONLY the JSON array, no other text."""
         api_key = getattr(settings, 'GEMINI_API_KEY', None) or getattr(settings, 'GOOGLE_API_KEY', None)
         if not api_key:
             raise ValueError("GEMINI_API_KEY or GOOGLE_API_KEY not configured in settings")
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.client = genai.Client(api_key=api_key)
     
     def extract_text_from_pdf(self, pdf_file) -> str:
         """Extract text content from a PDF file."""
@@ -92,9 +92,10 @@ Return ONLY the JSON array, no other text."""
         
         try:
             # Generate content using Gemini
-            response = self.model.generate_content(
-                self.EXTRACTION_PROMPT.replace('{pdf_text}', pdf_text),
-                generation_config=genai.types.GenerationConfig(
+            response = self.client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=self.EXTRACTION_PROMPT.replace('{pdf_text}', pdf_text),
+                config=types.GenerateContentConfig(
                     temperature=0.1,  # Low temperature for consistent parsing
                     max_output_tokens=4096,
                 )
